@@ -5,6 +5,7 @@ import {
   baseFilter,
   modulesFor,
   yearsFor,
+  imgSrc,
 } from "./questionData.js";
 
 const PAGE = 25;
@@ -47,7 +48,7 @@ function QCard({ r, onPickTag }) {
           <img
             key={p}
             loading="lazy"
-            src={p}
+            src={imgSrc(p)}
             alt={`Question ${r.questionNumber}, ${r.year} HSC ${r.subject}`}
           />
         ))}
@@ -73,7 +74,7 @@ function QCard({ r, onPickTag }) {
               <img
                 key={p}
                 loading="lazy"
-                src={p}
+                src={imgSrc(p)}
                 alt={`Marking guidelines for question ${r.questionNumber}`}
               />
             ))}

@@ -13,8 +13,11 @@ One app, two halves:
   2 weeks → monthly). Entries sync across your devices via a sync code.
   Optional AI marking gives you a second opinion on a redo.
 
-Built with Vite + React 18. Error-book entries live in Supabase; the question
-bank ships with the app as static data and is never written to.
+Vite + React 18, deployed as static files to GitHub Pages by GitHub Actions.
+No server and no third-party hosting. Error-book entries live in Supabase; the
+question bank ships with the app as static data and is never written to.
+
+Live at **https://alexheydt08-jpg.github.io/Hsc-Sorter/**
 
 ## Running it locally
 
@@ -24,29 +27,33 @@ cp .env.example .env     # then paste in your Supabase URL and anon key
 npm run dev
 ```
 
-Open the address it prints (usually http://localhost:5173).
-
-`npm run dev` runs the React app but **not** `api/mark.js` — Vite's dev server
-doesn't serve serverless functions, so "Ask AI to mark this" will fail locally.
-To test marking before deploying, run `npx vercel dev` instead, with
-`ANTHROPIC_API_KEY` added to your `.env`.
+Open the address it prints (usually http://localhost:5173). Everything works
+locally, AI marking included — there is no serverless function to emulate.
 
 ## Deploying
 
-Import the repo at [vercel.com/new](https://vercel.com/new). It detects Vite
-automatically; leave **Root Directory** as the repo root so `api/` is picked up.
+Pushing to `claude/github-files-creation-606838` triggers
+`.github/workflows/deploy.yml`, which builds the app and publishes it to GitHub
+Pages. Nothing else to run.
 
-Environment variables to set in the Vercel dashboard:
+One-time setup in the repo's **Settings**:
 
-| Variable | Where it's used | Notes |
-| --- | --- | --- |
-| `VITE_SUPABASE_URL` | browser | from Supabase → Project Settings → API |
-| `VITE_SUPABASE_ANON_KEY` | browser | same place |
-| `ANTHROPIC_API_KEY` | server only | from [console.anthropic.com](https://console.anthropic.com) — **no `VITE_` prefix**, that prefix would publish it to the browser |
+1. **Pages → Build and deployment → Source: GitHub Actions.**
+   (Not "Deploy from a branch" — the app needs a build step.)
+2. **Secrets and variables → Actions → Variables**, add two *repository
+   variables*:
 
-Environment variables only take effect on a new deployment, so redeploy after
-adding them. AI marking stays switched off until `ANTHROPIC_API_KEY` is set —
-the app says so rather than breaking.
+   | Variable | Value |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | your Supabase project URL |
+   | `VITE_SUPABASE_ANON_KEY` | your Supabase anon public key |
+
+   These are variables rather than secrets on purpose: the `VITE_` prefix puts
+   them in the browser bundle by design, so marking them secret would imply a
+   protection they don't have.
+
+The site is served from `/Hsc-Sorter/`, which `vite.config.js` sets as the base
+path. To serve from a domain root instead, build with `BASE_PATH=/`.
 
 ## AI marking
 
@@ -63,9 +70,26 @@ The AI's opinion is advisory. It never sets your tick or cross and never touches
 your revision schedule — only your own ✓/✗ does that. Where it suggests a mark,
 "Use this mark" fills in the marks box for you, and you still confirm.
 
-Marking runs server-side in `api/mark.js` on `claude-opus-5`, so the API key
-never reaches the browser. Each marked question costs a fraction of a cent; set
-a monthly spend limit in the Anthropic console.
+### Your API key
+
+Because the app is static files with no server behind it, marking calls
+Anthropic straight from your browser using a key **you** paste in under
+**⇄ Sync → AI marking key**. That key:
+
+- is stored only in that browser's `localStorage`;
+- is never committed, never in the build, and never in the repo;
+- has to be added again on each device you use.
+
+Get one at [console.anthropic.com](https://console.anthropic.com) and set a
+monthly spend limit while you're there — marking one question costs a fraction
+of a cent, on `claude-opus-5`.
+
+**The trade-off.** A key in `localStorage` is readable by anything that can run
+script on this origin, and by anyone with access to the unlocked device. That is
+the price of having no server; a server-side key would need a host like Vercel,
+which this setup deliberately avoids. Mitigate it with a spend limit, and revoke
+the key in the Anthropic console if a device is lost. Since every user brings
+their own key, nobody else visiting the site can spend your credit.
 
 ## Supabase setup
 
@@ -92,20 +116,28 @@ isn't guessable, but treat it like a password and don't post it publicly. There
 is no login and no password recovery — if you lose the sync code you lose access
 to those entries, so save it somewhere other than the phone it's on.
 
+## Installing it on your phone
+
+Open the Pages URL, tap **⇄ Sync**, paste your existing sync code, then use
+**Share → Add to Home Screen** (iPhone) or **Install app** from the browser menu
+(Android).
+
 ## Project structure
 
 ```
-api/mark.js            AI marking endpoint (Vercel serverless, server-side key)
-src/App.jsx            error book + the shared nav shell
-src/QuestionBank.jsx   browse/filter the 498 questions
-src/PracticeTest.jsx   practice paper builder + printable paper
-src/AiMarking.jsx      marking mode picker + suggestion card
-src/questionData.js    question data, taxonomy and paper-building helpers
-src/bankMeta.js        subject mapping (kept data-free so it loads eagerly)
-src/syncStore.js       Supabase read/write
-src/data/questions.json  the 498 questions
-public/img/            901 question and marking-guideline images
+.github/workflows/deploy.yml  build + publish to GitHub Pages
+src/App.jsx                   error book + the shared nav shell
+src/QuestionBank.jsx          browse/filter the 498 questions
+src/PracticeTest.jsx          practice paper builder + printable paper
+src/AiMarking.jsx             marking mode picker, suggestion card, key panel
+src/marking.js                the Anthropic call, prompt and result schema
+src/questionData.js           question data, taxonomy and paper-building helpers
+src/bankMeta.js               subject mapping (kept data-free so it loads eagerly)
+src/syncStore.js              Supabase read/write
+src/data/questions.json       the 498 questions
+public/img/                   901 question and marking-guideline images
 ```
 
-The question bank is code-split: its ~1.1MB of data loads only when you open
-the Question bank or Practice test, so the error book opens fast on a phone.
+Three things are code-split so the error book — the part used daily — opens
+fast on a phone: the question data (~1.1MB), the bank views, and the Anthropic
+SDK, which is fetched only when you actually ask for a marking.

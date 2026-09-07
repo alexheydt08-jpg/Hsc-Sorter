@@ -1,4 +1,55 @@
 import { useState } from "react";
+import { markAttempt, getApiKey, setApiKey, hasApiKey } from "./marking.js";
+
+/* Where you paste your Anthropic key. It stays in this browser's localStorage
+   and is never committed or built into the app. */
+export function ApiKeyPanel({ C, sans }) {
+  const [value, setValue] = useState(getApiKey());
+  const [saved, setSaved] = useState(false);
+  const stored = hasApiKey();
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
+      <div style={{ fontFamily: sans, fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>
+        AI marking key
+      </div>
+      <div style={{ fontFamily: sans, fontSize: 12.5, color: C.faint, marginBottom: 10 }}>
+        {stored
+          ? "A key is saved on this device. AI marking is available."
+          : "Paste an Anthropic API key to switch on AI marking. Get one at console.anthropic.com and set a monthly spend limit while you're there."}
+        {" "}It's stored only in this browser — add it again on each device you use.
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setSaved(false); }}
+          placeholder="sk-ant-..."
+          style={{
+            flex: 1, minWidth: 200, font: "inherit", fontFamily: sans, fontSize: 13,
+            padding: "8px 10px", border: `1px solid ${C.rule}`, borderRadius: 8,
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => { setApiKey(value); setSaved(true); }}
+          style={{
+            appearance: "none", font: "inherit", fontFamily: sans, fontSize: 13,
+            fontWeight: 600, cursor: "pointer", border: `1px solid ${C.rule}`,
+            background: "#fff", borderRadius: 8, padding: "8px 14px",
+          }}
+        >
+          {value ? "Save key" : "Clear key"}
+        </button>
+      </div>
+      {saved && (
+        <div style={{ fontFamily: sans, fontSize: 12.5, color: C.green, marginTop: 6 }}>
+          {value ? "Saved on this device." : "Key removed from this device."}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* Marking modes stored on an entry as `aiMarkingMode`. */
 export const AI_MODES = [
@@ -85,30 +136,20 @@ export function AiMarkingCard({
     setState("loading");
     setError("");
     try {
-      const r = await fetch("/api/mark", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: entry.subject,
-          subtopic: entry.subtopic,
-          questionText: entry.questionText,
-          criteriaText: entry.criteriaText,
-          attemptText,
-          marksAvailable: entry.marksAvailable,
-          mode,
-        }),
+      const data = await markAttempt({
+        subject: entry.subject,
+        subtopic: entry.subtopic,
+        questionText: entry.questionText,
+        criteriaText: entry.criteriaText,
+        attemptText,
+        marksAvailable: entry.marksAvailable,
+        mode,
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setError(data.error || `Marking failed (${r.status}).`);
-        setState("error");
-        return;
-      }
       setResult(data);
       setState("done");
       onResult?.(data);
-    } catch {
-      setError("Couldn't reach the marking service. Check your connection.");
+    } catch (err) {
+      setError(err?.message || "Marking failed. Mark it yourself this time.");
       setState("error");
     }
   };

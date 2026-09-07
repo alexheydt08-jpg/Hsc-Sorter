@@ -2,6 +2,12 @@ import QUESTIONS from "./data/questions.json";
 
 export { BANK_SUBJECT } from "./bankMeta.js";
 
+/* Image paths are stored root-relative ("/img/…") but the app is served from a
+   subpath on GitHub Pages ("/Hsc-Sorter/"). BASE_URL always ends in "/", and is
+   just "/" under `npm run dev`, so this works in both. */
+const BASE = import.meta.env.BASE_URL || "/";
+export const imgSrc = (p) => BASE + String(p).replace(/^\/+/, "");
+
 /* subject -> module -> inquiry question -> topic
    (the sorter's original TAX object, built once instead of on every render) */
 function buildTax(data) {

@@ -7,6 +7,7 @@ import {
   ptTime,
   shuffle,
   allocate,
+  imgSrc,
 } from "./questionData.js";
 
 /* the three pools a paper is built from, for the currently ticked topics */
@@ -218,7 +219,7 @@ export function PracticeTestPaper({ paper, onBack }) {
         Source: {r.year} HSC {r.subject} · Q{r.questionNumber}
       </div>
       {r.questionImages.map((p) => (
-        <img key={p} src={p} alt="" />
+        <img key={p} src={imgSrc(p)} alt="" />
       ))}
     </div>
   );
@@ -316,7 +317,7 @@ export function PracticeTestPaper({ paper, onBack }) {
                 Answer: <b>{r.answer || "?"}</b>
               </div>
             ) : (
-              r.mgImages.map((p) => <img key={p} src={p} alt="" />)
+              r.mgImages.map((p) => <img key={p} src={imgSrc(p)} alt="" />)
             )}
           </div>
         ))}

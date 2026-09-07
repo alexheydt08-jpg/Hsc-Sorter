@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import "./sorter.css";
-import { AiModePicker, AiMarkingCard } from "./AiMarking.jsx";
+import { AiModePicker, AiMarkingCard, ApiKeyPanel } from "./AiMarking.jsx";
 import { BANK_SUBJECT } from "./bankMeta.js";
 
 /* The question bank carries ~1.1MB of exam data. Loading it lazily keeps the
@@ -1067,6 +1067,8 @@ function SyncPanel({ syncCode, onChangeSyncCode, onClose }) {
             </div>
           )}
         </div>
+
+        <ApiKeyPanel C={C} sans={sans} />
 
         <div style={{ marginTop: 18, textAlign: "right" }}>
           <Btn small tone="ghost" onClick={onClose}>Done</Btn>
