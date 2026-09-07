@@ -5,26 +5,51 @@
    ========================================================================== */
 "use strict";
 
-const DATA = window.QDATA;
+/* NESA HSC papers plus school trial papers, in one list. Trials carry a
+   `school` and a tagging `confidence`; anything the classifier could not place
+   confidently is left untagged and collected under UNSORTED so it stays
+   browsable by school/year/search without polluting the syllabus tree. */
+const UNSORTED = "Unsorted — needs a topic";
+const HSC = (window.QDATA || []).map(r => ({ ...r, source: "HSC", school: null }));
+const TRIALS = (window.TDATA || []);
+const DATA = HSC.concat(TRIALS);
 
-/* subject -> module -> inquiry question -> topic */
+const SCHOOLS = [...new Set(TRIALS.map(r => r.school))].sort();
+
+/* subject -> module -> inquiry question -> topic (built from tagged questions;
+   only the NESA set defines the canonical tree, trials slot into it) */
 const TAX = {};
-DATA.forEach(r => r.tags.forEach(t => {
+DATA.forEach(r => (r.tags || []).forEach(t => {
   TAX[r.subject] = TAX[r.subject] || {};
   TAX[r.subject][t.module] = TAX[r.subject][t.module] || {};
   TAX[r.subject][t.module][t.iq] = t.topic;
 }));
-const MODORDER = m => parseInt(m.match(/Module (\d)/)[1]);
+/* every subject that has trials gets the catch-all bucket */
+for (const r of TRIALS) {
+  if (!(r.tags || []).length) {
+    TAX[r.subject] = TAX[r.subject] || {};
+    TAX[r.subject][UNSORTED] = TAX[r.subject][UNSORTED] || {};
+    TAX[r.subject][UNSORTED][UNSORTED] = "Not yet sorted";
+  }
+}
+const MODORDER = m => {
+  if (m === UNSORTED) return 99;
+  const hit = m.match(/Module (\d)/);
+  return hit ? parseInt(hit[1]) : 98;
+};
 
 DATA.forEach(r => {
-  r._hay = (r.questionText + " " +
-    r.tags.map(t => `${t.module} ${t.topic} ${t.iq}`).join(" ")).toLowerCase();
+  r._hay = ((r.questionText || "") + " " + (r.school || "") + " " + (r.source || "") + " " +
+    (r.tags || []).map(t => `${t.module} ${t.topic} ${t.iq}`).join(" ")).toLowerCase();
 });
 
-const state = { module:null, iq:null, q:"", years:new Set(), section:"", marks:"", openMods:new Set() };
+const state = { module:null, iq:null, q:"", years:new Set(), section:"", marks:"",
+                source:"", school:"", openMods:new Set() };
 
 function baseFilter(r, ignoreTree){
   if (r.subject !== APP.subject) return false;
+  if (state.source && r.source !== state.source) return false;
+  if (state.school && r.school !== state.school) return false;
   if (state.years.size && !state.years.has(r.year)) return false;
   if (state.section && r.section !== state.section) return false;
   if (state.marks){
@@ -33,8 +58,10 @@ function baseFilter(r, ignoreTree){
   }
   if (state.q && !state.q.toLowerCase().split(/\s+/).every(w => r._hay.includes(w))) return false;
   if (!ignoreTree){
-    if (state.iq && !r.tags.some(t => t.iq === state.iq)) return false;
-    if (!state.iq && state.module && !r.tags.some(t => t.module === state.module)) return false;
+    const tags = r.tags || [];
+    if (state.module === UNSORTED) return tags.length === 0;
+    if (state.iq && !tags.some(t => t.iq === state.iq)) return false;
+    if (!state.iq && state.module && !tags.some(t => t.module === state.module)) return false;
   }
   return true;
 }
@@ -51,6 +78,30 @@ function renderYears(){
   });
 }
 
+function renderSchools(){
+  const avail = [...new Set(TRIALS.filter(r => r.subject === APP.subject).map(r => r.school))].sort();
+  const sel = $("#school");
+  /* a school only means anything for trials, and only for a subject that has
+     them — otherwise clear it rather than silently filtering to nothing */
+  const usable = state.source !== "HSC" && avail.length > 0;
+  if (!usable) state.school = "";
+  else if (!avail.includes(state.school)) state.school = "";
+  sel.innerHTML = `<option value="">Any school</option>` +
+    avail.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  sel.value = state.school;
+  sel.disabled = !usable;
+
+  /* if this subject has no trials at all, don't leave the user on an empty
+     "trials only" view */
+  const src = $("#source");
+  const hasTrials = avail.length > 0;
+  src.options[2].disabled = !hasTrials;
+  if (!hasTrials && state.source === "Trial") {
+    state.source = "";
+    src.value = "";
+  }
+}
+
 /* ---------- browse tree -------------------------------------------------- */
 function renderTree(){
   const mods = Object.keys(TAX[APP.subject] || {}).sort((a,b) => MODORDER(a)-MODORDER(b));
@@ -59,10 +110,14 @@ function renderTree(){
   let html = `<button class="allbtn ${!state.module && !state.iq ? "on" : ""}" id="allb">All questions<span class="cnt">${allN}</span></button>`;
   html += mods.map(m => {
     const iqs = TAX[APP.subject][m];
-    const mN = DATA.filter(r => baseFilter(r, true) && r.tags.some(t => t.module === m)).length;
+    const mN = m === UNSORTED
+      ? DATA.filter(r => baseFilter(r, true) && !(r.tags || []).length).length
+      : DATA.filter(r => baseFilter(r, true) && (r.tags || []).some(t => t.module === m)).length;
     const open = state.openMods.has(m) || state.module === m;
     const rows = Object.keys(iqs).map(iq => {
-      const n = DATA.filter(r => baseFilter(r, true) && r.tags.some(t => t.iq === iq)).length;
+      const n = m === UNSORTED
+        ? DATA.filter(r => baseFilter(r, true) && !(r.tags || []).length).length
+        : DATA.filter(r => baseFilter(r, true) && (r.tags || []).some(t => t.iq === iq)).length;
       return `<button class="iq ${state.iq === iq ? "on" : ""}" data-m="${esc(m)}" data-iq="${esc(iq)}">
         <span class="t"><b>${esc(iqs[iq])}</b><i>${esc(iq)}</i></span><span class="cnt">${n}</span></button>`;
     }).join("");
@@ -90,13 +145,15 @@ function renderTree(){
 
 /* ---------- question cards ----------------------------------------------- */
 function card(r){
-  const tagbtns = r.tags.map(t =>
+  const isTrial = r.source === "Trial";
+  const origin = isTrial ? `${r.year} ${r.school} trial` : `${r.year} HSC`;
+  const tagbtns = (r.tags || []).map(t =>
     `<span class="tag" data-m="${esc(t.module)}" data-iq="${esc(t.iq)}" title="${esc(t.iq)}">${esc(t.module.replace("Module","Mod").split(":")[0])} · ${esc(t.topic)}</span>`).join("");
   const qimgs = (r.questionImages || []).map(p =>
     `<img loading="lazy" src="${esc(p)}" alt="Question ${r.questionNumber}, ${r.year} HSC ${esc(r.subject)}">`).join("");
 
   let mg = "";
-  if (r.section === "I") mg = `<div class="mcans">Correct answer: <b>${esc(r.answer || "?")}</b></div>`;
+  if (r.section === "I" && r.answer) mg = `<div class="mcans">Correct answer: <b>${esc(r.answer)}</b></div>`;
   mg += (r.mgImages || []).map(p =>
     `<img loading="lazy" src="${esc(p)}" alt="Marking guidelines for question ${r.questionNumber}">`).join("");
   const parts = r.parts && r.parts.length > 1
@@ -104,18 +161,19 @@ function card(r){
 
   return `<article class="qcard" data-id="${esc(r.id)}">
     <div class="qhead">
-      <span class="qtitle">${r.year} · Q${r.questionNumber}</span>
-      <span class="marksq">${r.marks} mark${r.marks === 1 ? "" : "s"}</span>
+      <span class="qtitle">${esc(origin)} · Q${r.questionNumber}</span>
+      ${r.marks ? `<span class="marksq">${r.marks} mark${r.marks === 1 ? "" : "s"}</span>` : ""}
       <span class="badge">Section ${r.section} — ${r.section === "I" ? "multiple choice" : "extended response"}</span>
-      <span class="badge">${esc(r.subject)}</span>
+      <span class="badge${isTrial ? " trial" : ""}">${isTrial ? "Trial paper" : "NESA HSC"}</span>
+      ${isTrial && r.confidence === "med" ? `<span class="badge auto" title="Topic assigned automatically — may be imprecise">auto-tagged</span>` : ""}
     </div>
     <div class="tagline">${tagbtns}</div>
     <div class="qimgs">${qimgs}</div>
     <div class="qfoot">
-      <button class="reveal" aria-expanded="false">Show marking guidelines &amp; sample answer</button>
+      ${(r.mgImages || []).length || r.answer ? `<button class="reveal" aria-expanded="false">Show marking guidelines &amp; sample answer</button>` : `<span class="reveal none">No solutions with this paper</span>`}
       <button class="markit" title="Send this question and its official guidelines to the marker">✎ Mark my answer</button>
     </div>
-    <div class="mg"><div class="mghdr">Official NESA marking guidelines</div>${mg}${parts}</div>
+    <div class="mg"><div class="mghdr">${isTrial ? "Marking guidelines from the school's solutions" : "Official NESA marking guidelines"}</div>${mg || "<p class=\"note\" style=\"margin:0\">No solutions were published with this paper.</p>"}${parts}</div>
   </article>`;
 }
 
@@ -140,6 +198,8 @@ function renderResults(reset){
 
 function renderCrumb(){
   let path = `<b>${esc(APP.subject)}</b>`;
+  if (state.source) path += ` · ${state.source === "HSC" ? "HSC exams" : "trial papers"}`;
+  if (state.school) path += ` · <b>${esc(state.school)}</b>`;
   if (state.module) path += ` → <b>${esc(state.module)}</b>`;
   if (state.iq){
     const topic = (TAX[APP.subject][state.module] || {})[state.iq] || "";
@@ -153,8 +213,8 @@ function bindCards(){
     if (c._bound) return;
     c._bound = true;
 
-    const btn = c.querySelector(".reveal");
-    btn.onclick = () => {
+    const btn = c.querySelector("button.reveal");
+    if (btn) btn.onclick = () => {
       const open = c.classList.toggle("open");
       btn.setAttribute("aria-expanded", String(open));
       btn.textContent = open ? "Hide marking guidelines & sample answer"
@@ -182,13 +242,16 @@ window.addEventListener("scroll", () => {
 });
 
 $("#q").addEventListener("input", e => { state.q = e.target.value.trim(); renderTree(); renderResults(); });
+$("#source").onchange = e => { state.source = e.target.value; renderSchools(); renderAll(); };
+$("#school").onchange = e => { state.school = e.target.value; renderAll(); };
 $("#section").onchange = e => { state.section = e.target.value; renderAll(); };
 $("#marks").onchange = e => { state.marks = e.target.value; renderAll(); };
 $("#clear").onclick = () => {
   state.q = ""; state.years = new Set(); state.section = ""; state.marks = "";
-  state.module = null; state.iq = null;
+  state.source = ""; state.school = ""; state.module = null; state.iq = null;
   $("#q").value = ""; $("#section").value = ""; $("#marks").value = "";
-  renderAll();
+  $("#source").value = ""; $("#school").value = "";
+  renderSchools(); renderAll();
 };
 $("#navtoggle").onclick = () => {
   const open = $("#tree").classList.toggle("open");
@@ -196,6 +259,7 @@ $("#navtoggle").onclick = () => {
 };
 
 function renderAll(){ renderYears(); renderTree(); renderResults(); }
+renderSchools();
 
 /* ==========================================================================
    PRACTICE TEST
@@ -366,6 +430,7 @@ document.addEventListener("keydown", e => {
 /* ---------- react to the shared shell ------------------------------------ */
 APP.onSubject.push(() => {
   state.module = null; state.iq = null; state.openMods = new Set();
+  renderSchools();
   /* topics belong to one subject, so drop picks that no longer exist */
   [...PT.checked].forEach(iq => {
     const ok = Object.keys(TAX[APP.subject] || {}).some(m => TAX[APP.subject][m][iq]);

@@ -258,7 +258,11 @@ async function sendToMarker(rec){
   ["question","guidelines"].forEach(s => { files[s].length = 0; drawFiles(s); });
 
   fromSorter = rec;
-  const label = `${rec.year} HSC ${rec.subject} · Question ${rec.questionNumber} · ${rec.marks} mark${rec.marks===1?"":"s"}`;
+  const origin = rec.source === "Trial"
+    ? `${rec.year} ${rec.school} trial`
+    : `${rec.year} HSC`;
+  const label = `${origin} ${rec.subject} · Question ${rec.questionNumber}` +
+    (rec.marks ? ` · ${rec.marks} mark${rec.marks===1?"":"s"}` : "");
   const box = $("#fromsorter");
   box.classList.remove("hidden");
   box.innerHTML = `<button class="x" id="fsx" aria-label="Detach this question">×</button>
@@ -266,7 +270,7 @@ async function sendToMarker(rec){
     <span id="fsstat">Attaching the question and its official marking guidelines…</span>`;
   $("#fsx").onclick = detachSorter;
 
-  $("#mq").value = `${rec.questionText || ""}\n\n(${rec.marks} mark${rec.marks===1?"":"s"})`.trim();
+  $("#mq").value = `${rec.questionText || ""}${rec.marks ? `\n\n(${rec.marks} mark${rec.marks===1?"":"s"})` : ""}`.trim();
 
   let gl = "";
   if (rec.section === "I" && rec.answer) gl = `Official answer key: the correct option is ${rec.answer}.`;
@@ -279,7 +283,12 @@ async function sendToMarker(rec){
     for (const p of (rec.questionImages || [])) files.question.push(await pathToFile(p));
     for (const p of (rec.mgImages || []))       files.guidelines.push(await pathToFile(p));
     drawFiles("question"); drawFiles("guidelines");
-    stat.textContent = "The question image and the official NESA marking guidelines are attached below. Type your answer and mark it.";
+    const hasG = files.guidelines.length || $("#g").value.trim();
+    stat.textContent = hasG
+      ? (rec.source === "Trial"
+          ? "The question image and the school's marking guidelines are attached below. Type your answer and mark it."
+          : "The question image and the official NESA marking guidelines are attached below. Type your answer and mark it.")
+      : "The question image is attached. No solutions came with this paper, so the marker will build its own HSC-style breakdown.";
   } catch {
     stat.textContent = "Question text and guidelines are filled in below. The images could not be attached — the text is enough to mark against.";
   }
@@ -487,7 +496,7 @@ function showResult(r){
     <div class="tally">
       <span class="n">${esc(r.total)}</span>
       <span class="of">/ ${r.max != null ? esc(r.max) : "?"}</span>
-      <span class="who">${esc(r.subject)}${fromSorter ? `<br>${esc(fromSorter.year)} HSC · Q${esc(fromSorter.questionNumber)}` : ""}</span>
+      <span class="who">${esc(r.subject)}${fromSorter ? `<br>${esc(fromSorter.year)} ${esc(fromSorter.source === "Trial" ? fromSorter.school : "HSC")} · Q${esc(fromSorter.questionNumber)}` : ""}</span>
     </div>
     ${r.inferred ? `<p class="caveat">Marked without official guidelines — the breakdown below was inferred from standard HSC conventions. Send a question from Browse and its real NESA guidelines come with it.</p>` : `<div style="height:14px"></div>`}
     ${rows ? `<p class="sec">Mark by mark</p><ul class="crit">${rows}</ul>` : ""}
@@ -540,7 +549,7 @@ function fillModules(select, subject, includeAll){
 
 function currentQuestionText(){
   if (fromSorter)
-    return `${fromSorter.year} HSC ${fromSorter.subject} Q${fromSorter.questionNumber} — ${(fromSorter.questionText||"").slice(0,150)}`.trim();
+    return `${fromSorter.year} ${fromSorter.source === "Trial" ? fromSorter.school + " trial" : "HSC"} ${fromSorter.subject} Q${fromSorter.questionNumber} — ${(fromSorter.questionText||"").slice(0,150)}`.trim();
   if (mode === "combined")
     return $("#cnote").value.trim() || (files.combined[0]?.name ? `From ${files.combined[0].name}` : "Attached file");
   if (mode === "paper"){

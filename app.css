@@ -374,3 +374,10 @@ body.pt-mode #printview{display:block;max-width:840px;margin:0 auto;padding:18px
 .entry .more .fb{font:400 14.5px/1.6 var(--serif)}
 .entry .rm{background:none;border:0;color:var(--pen);font:450 13px var(--sans);cursor:pointer;padding:0}
 .entry .rm:hover{text-decoration:underline}
+
+/* trial-paper additions */
+.badge.trial{border-color:var(--part);color:var(--part);background:var(--part-wash)}
+.badge.auto{border-color:var(--rule);color:var(--ink-3);background:var(--sunk);font-style:italic}
+.qfoot .reveal.none{flex:1;min-width:210px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--rule);color:var(--ink-3);background:var(--sunk);padding:9px 12px;
+  font:400 13.5px var(--sans);cursor:default}

@@ -42,6 +42,16 @@
       <div class="controls">
         <input id="q" type="search" placeholder="Search question text, modules, inquiry questions…" aria-label="Search questions">
         <div class="filters">
+          <div class="fgroup"><span class="lbl">Papers</span>
+            <select id="source" aria-label="Paper type">
+              <option value="">HSC + trials</option>
+              <option value="HSC">HSC exams only</option>
+              <option value="Trial">Trial papers only</option>
+            </select>
+          </div>
+          <div class="fgroup"><span class="lbl">School</span>
+            <select id="school" aria-label="School"><option value="">Any school</option></select>
+          </div>
           <div class="fgroup"><span class="lbl">Year</span><span id="years"></span></div>
           <div class="fgroup"><span class="lbl">Section</span>
             <select id="section" aria-label="Section">
@@ -263,6 +273,7 @@
 <div id="printview"></div>
 
 <script src="data.js"></script>
+<script src="trials.js"></script>
 <script src="app.js"></script>
 <script src="sorter.js"></script>
 <script src="marker.js"></script>

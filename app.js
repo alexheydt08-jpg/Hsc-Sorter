@@ -39,7 +39,8 @@ function drawSubjects(){
   const host = $("#subjects");
   host.textContent = "";
   for (const s of ["Chemistry", "Physics"]){
-    const n = (window.QDATA || []).filter(r => r.subject === s).length;
+    const n = (window.QDATA || []).filter(r => r.subject === s).length
+            + (window.TDATA || []).filter(r => r.subject === s).length;
     const b = document.createElement("button");
     b.type = "button";
     b.setAttribute("aria-pressed", String(s === APP.subject));
