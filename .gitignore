@@ -1,3 +1,14 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Dependencies and build output
+node_modules/
+dist/
+
+# OS / editor cruft
 .DS_Store
+__MACOSX/
 Thumbs.db
 *.log
