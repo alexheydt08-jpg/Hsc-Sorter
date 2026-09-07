@@ -77,7 +77,7 @@ const SUBJECTS = ["chemistry", "physics", "mathsExt1"];
 const DAY = 86400000;
 
 /* ---------- storage helpers (Supabase — syncs across every device using the same sync code) ---------- */
-import { remoteGet, remoteSet, remoteDelete, generateSyncCode } from "./syncStore.js";
+import { remoteGet, remoteSet, remoteDelete, generateSyncCode, isSyncConfigured } from "./syncStore.js";
 
 const SYNC_CODE_LOCAL_KEY = "redpen_sync_code"; // stored per-device only; the data itself lives in Supabase
 export function getSavedSyncCode() { return localStorage.getItem(SYNC_CODE_LOCAL_KEY); }
@@ -222,9 +222,9 @@ function ImageBox({ label, images, setImages }) {
 }
 
 /* ---------- main app ---------- */
-function AppInner({ syncCode, onChangeSyncCode }) {
+function AppInner({ syncCode, onChangeSyncCode, syncUnavailable }) {
   const [subject, setSubject] = useState("chemistry");
-  const [view, setView] = useState("due"); // due | add | browse | progress
+  const [view, setView] = useState(syncUnavailable ? "bank" : "due");
   const [entries, setEntries] = useState([]);
   const [meta, setMeta] = useState({ attemptDates: [], clearedDates: [] });
   const [loading, setLoading] = useState(true);
@@ -250,11 +250,12 @@ function AppInner({ syncCode, onChangeSyncCode }) {
 
   useEffect(() => {
     (async () => {
+      if (syncUnavailable) { setLoading(false); return; }
       const idx = await loadJSON("index", []);
       const m = await loadJSON("meta", { attemptDates: [], clearedDates: [] });
       setEntries(idx); setMeta(m); setLoading(false);
     })();
-  }, []);
+  }, [syncUnavailable]);
 
   const persistEntries = async (next) => {
     setEntries(next);
@@ -345,11 +346,11 @@ function AppInner({ syncCode, onChangeSyncCode }) {
             </span>
           </h1>
           <div style={{ fontFamily: sans, fontSize: 13, color: C.faint, display: "flex", alignItems: "center", gap: 12 }}>
-            <span>{streak > 0 ? <>🔥 {streak}-day streak · </> : null}{clearedThisWeek} cleared this week</span>
-            <button onClick={() => setShowSync(true)}
+            {!syncUnavailable && <span>{streak > 0 ? <>🔥 {streak}-day streak · </> : null}{clearedThisWeek} cleared this week</span>}
+            {!syncUnavailable && <button onClick={() => setShowSync(true)}
               style={{ background: "none", border: `1px solid ${C.rule}`, borderRadius: 14, padding: "3px 11px", fontFamily: sans, fontSize: 12.5, cursor: "pointer", color: C.ink }}>
               ⇄ Sync
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -381,7 +382,10 @@ function AppInner({ syncCode, onChangeSyncCode }) {
 
         {/* view nav */}
         <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-          {[["bank", "Question bank"], ["ptest", "Practice test"], ["due", `Due for redo${dueEntries.length ? ` (${dueEntries.length})` : ""}`], ["add", "Log an error"], ["browse", "Browse"], ["progress", "Progress"]].map(([v, lbl]) => (
+          {(syncUnavailable
+            ? [["bank", "Question bank"], ["ptest", "Practice test"]]
+            : [["bank", "Question bank"], ["ptest", "Practice test"], ["due", `Due for redo${dueEntries.length ? ` (${dueEntries.length})` : ""}`], ["add", "Log an error"], ["browse", "Browse"], ["progress", "Progress"]]
+          ).map(([v, lbl]) => (
             <button key={v} onClick={() => { setView(v); setRedoQueue(null); setEditId(null); }}
               style={{
                 fontFamily: sans, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
@@ -394,6 +398,16 @@ function AppInner({ syncCode, onChangeSyncCode }) {
             </button>
           ))}
         </div>
+
+        {syncUnavailable && (
+          <div style={{ marginTop: 12, background: C.amberSoft, border: `1px solid ${C.amber}`, borderRadius: 8, padding: "10px 13px", fontFamily: sans, fontSize: 13, color: C.ink }}>
+            <b>Error book unavailable in this deployment.</b> The question bank and
+            practice tests work as normal. To switch the error book on, add{" "}
+            <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>{" "}
+            as repository variables under Settings → Secrets and variables →
+            Actions → Variables, then re-run the deploy. See the README.
+          </div>
+        )}
 
         {saveError && (
           <div style={{ marginTop: 12, background: C.redSoft, border: `1px solid ${C.red}`, borderRadius: 8, padding: "8px 12px", fontFamily: sans, fontSize: 13, color: C.red }}>
@@ -1085,6 +1099,13 @@ export default function App() {
   const [joinInput, setJoinInput] = useState("");
 
   useEffect(() => { if (syncCode) setActiveSyncCode(syncCode); }, [syncCode]);
+
+  /* Deployed without the Supabase build variables: the error book can't work,
+     but the question bank and practice test need no database at all — so run
+     in bank-only mode rather than showing a blank page. */
+  if (!isSyncConfigured()) {
+    return <AppInner syncCode={null} onChangeSyncCode={() => {}} syncUnavailable />;
+  }
 
   const startWithCode = (code) => {
     setSavedSyncCode(code);

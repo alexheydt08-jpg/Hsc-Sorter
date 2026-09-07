@@ -1,15 +1,31 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+/* True only when both values were present at build time. Checked before the
+   error book is used so a deployment without them degrades to a readable
+   message instead of a blank page — createClient throws on an empty URL, and
+   at module scope that would take the whole app down, question bank included. */
+export const isSyncConfigured = () =>
+  Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+let _supabase = null;
+function supabaseClient() {
+  if (!isSyncConfigured()) {
+    throw new Error(
+      "Syncing isn't configured for this build — VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing."
+    );
+  }
+  if (!_supabase) _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _supabase;
+}
 
 /* All rows are namespaced by syncCode so every device using the same code
    reads and writes the same data. See README for the one-time Supabase setup. */
 
 export async function remoteGet(syncCode, key) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient()
     .from("kv_store")
     .select("value")
     .eq("sync_code", syncCode)
@@ -20,7 +36,7 @@ export async function remoteGet(syncCode, key) {
 }
 
 export async function remoteSet(syncCode, key, value) {
-  const { error } = await supabase
+  const { error } = await supabaseClient()
     .from("kv_store")
     .upsert(
       { sync_code: syncCode, key, value, updated_at: new Date().toISOString() },
@@ -30,7 +46,7 @@ export async function remoteSet(syncCode, key, value) {
 }
 
 export async function remoteDelete(syncCode, key) {
-  const { error } = await supabase
+  const { error } = await supabaseClient()
     .from("kv_store")
     .delete()
     .eq("sync_code", syncCode)
