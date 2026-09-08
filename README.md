@@ -6,13 +6,43 @@ JavaScript — no build step, no framework, no server. Live at
 
 Four sections, all sharing the subject you pick in the header:
 
-**Browse questions** — every Section I and Section II question from the 2019–2025
-papers, 498 in total, each shown as an exact image cut from the official paper so
-diagrams, graphs and equations are preserved verbatim. Organised by Module (5–8)
-and syllabus Inquiry Question following each year's official NESA mapping grid,
-with search and year / section / marks filters that all combine. "Show marking
-guidelines & sample answer" reveals the official NESA criteria, collapsed by
-default so you can self-test first.
+**Browse questions** — 2863 questions in all: the 498 from the NESA HSC papers
+plus 2365 cut from 75 school trial papers. Each is an exact image taken from the
+paper, so diagrams, graphs and equations are preserved verbatim. Organised by
+Module (5–8) and syllabus Inquiry Question, with search and paper / school /
+year / section / marks filters that all combine. "Show marking guidelines &
+sample answer" reveals the criteria, collapsed by default so you can self-test
+first — the official NESA guidelines for HSC questions, the school's own
+solutions for trial questions.
+
+|            | HSC  | Trials | Total |
+| ---------- | ---: | -----: | ----: |
+| Chemistry  |  255 |   1246 |  1501 |
+| Physics    |  243 |   1119 |  1362 |
+
+## The trial papers
+
+75 papers, 2019–2025, from Ascham, Baulkham Hills, Girraween, James Ruse,
+Normanhurst Boys, North Sydney Boys, North Sydney Girls, Sydney Boys, Sydney
+Girls and Sydney Grammar — 40 Chemistry and 35 Physics.
+
+Unlike the NESA questions, these carry no official syllabus mapping, so each is
+tagged automatically: a TF-IDF nearest-neighbour classifier trained on the
+NESA-tagged questions, cross-checked against a keyword classifier. A tag is
+applied only where the two agree, or where the keyword rules abstain entirely.
+Measured leave-one-out against the NESA set, that places about 82% of questions
+with roughly 85% topic and 94% module accuracy.
+
+The remaining 442 are deliberately left untagged and collected under **Unsorted
+— needs a topic**, where they stay searchable and filterable by school and year
+rather than being filed under a topic they may not belong to. They are not
+offered in the practice-test builder, which selects by topic.
+
+Segmentation is automatic too, and a few papers resist it. Sydney Grammar 2019
+(Physics) yields only 4 questions — its multiple-choice numbering is not in the
+text layer and does not survive OCR. A handful of others are missing part of a
+section, and some papers were published without solutions, in which case the
+card says so instead of offering a reveal button.
 
 **Practice test** — tick whole modules or individual inquiry questions, set how
 many marks of multiple choice, short answer (2–4) and long response (5+) you
@@ -35,9 +65,10 @@ your answer, the comment and the fixes. Export and import it as JSON.
 ## What ties the two halves together
 
 Every question in Browse has a **✎ Mark my answer** button. It sends that
-question to the marker with the exact question image *and* the official NESA
-marking guidelines already attached — so the marker grades against the real
-criteria rather than inferring its own. Type your attempt and mark it. Anything
+question to the marker with the exact question image *and* its marking
+guidelines already attached — NESA's for an HSC question, the school's own
+solutions for a trial one — so the marker grades against the real criteria
+rather than inferring its own. Type your attempt and mark it. Anything
 you bank from there keeps a link back, so "Try it again" reopens the same
 question later.
 
@@ -92,11 +123,15 @@ app.css      the whole design system
 app.js       shared shell: the subject, the section tabs
 sorter.js    browse, filters, the tree, the practice-test maker
 marker.js    the marker, the Anthropic call, the bank
-data.js      the 498 questions (window.QDATA)
+data.js      the 498 NESA HSC questions (window.QDATA)
 data.json    the same data as plain JSON, for reuse
-img/         901 question and marking-guideline images
+trials.js    the 2365 trial-paper questions (window.TDATA)
+img/         901 NESA question and marking-guideline images
+img/trials/  5566 trial-paper question and solution images
 ```
 
 Question and marking-guideline content © NSW Education Standards Authority
 (NESA), reproduced from the published HSC examination papers and marking
-guidelines for personal study. AI marking is a study aid, not an official mark.
+guidelines for personal study. Trial paper content remains the property of the
+schools that set the papers, reproduced here for personal study. AI marking is a
+study aid, not an official mark.
