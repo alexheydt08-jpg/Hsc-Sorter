@@ -299,7 +299,12 @@ function ptUpdateMeta(){
 
 function ptRenderTree(){
   $("#ptsubj").textContent = APP.subject;
-  const mods = Object.keys(TAX[APP.subject] || {}).sort((a,b) => MODORDER(a)-MODORDER(b));
+  /* the catch-all bucket is deliberately absent here: a practice test is built
+     by topic, and untagged questions match no topic, so offering it would only
+     ever yield an empty paper. They stay reachable from Browse. */
+  const mods = Object.keys(TAX[APP.subject] || {})
+    .filter(m => m !== UNSORTED)
+    .sort((a,b) => MODORDER(a)-MODORDER(b));
   $("#pttree").innerHTML = mods.map(m => {
     const iqs = TAX[APP.subject][m];
     const rows = Object.keys(iqs).map(iq =>
