@@ -151,7 +151,7 @@ let CARDS = [];
 
 function blankCard(subject){
   return {
-    id: uid(), created: Date.now(),
+    id: uid(), created: Date.now(), updatedAt: Date.now(),
     subject: subject || APP.subject,
     deck: { module: "", iqs: [] },
     front: { text: "", images: [] },
@@ -161,28 +161,93 @@ function blankCard(subject){
   };
 }
 
+const TOMBSTONE_TTL = 60 * DAY;
+
 async function loadCards(){
   CARDS = await dbAll("cards");
+  /* a deletion has to linger long enough for every device to see it, but not
+     forever; anything this old has certainly propagated */
+  const stale = CARDS.filter(c => c.deleted && Date.now() - (c.deletedAt || 0) > TOMBSTONE_TTL);
+  for (const c of stale) await dbDel("cards", c.id).catch(() => {});
+  if (stale.length) CARDS = CARDS.filter(c => !stale.includes(c));
   CARDS.sort((a, b) => b.created - a.created);
 }
 
+/* tombstones stay in the store so deletions can propagate, but nothing that
+   draws the collection should ever see them */
+const visibleCards = () => CARDS.filter(c => !c.deleted);
+
+/* A local edit: stamp the clock and let the sync layer know. */
 async function putCard(c){
+  c.updatedAt = Date.now();
+  await putCardRaw(c);
+  try { window.onCardsChanged?.(); } catch {}
+}
+
+/* A write that is not a local edit — a merge from another device, or the
+   legacy migration. The incoming updatedAt is what decides future merges, so
+   it must survive untouched, and this must not trigger a push back. */
+async function putCardRaw(c){
   await dbPut("cards", c);
   const i = CARDS.findIndex(x => x.id === c.id);
   if (i === -1) CARDS.unshift(c); else CARDS[i] = c;
 }
 
+/* Soft delete. A row removed outright cannot propagate: the other device has
+   no way to tell "deleted here" from "not created here yet", and would send it
+   straight back. The card is emptied and marked instead. */
 async function removeCard(c){
   for (const im of [...c.front.images, ...c.back.images])
     if (im.kind === "blob") await dbDel("blobs", im.id).catch(() => {});
-  await dbDel("cards", c.id);
-  CARDS = CARDS.filter(x => x.id !== c.id);
+  c.deleted = true;
+  c.deletedAt = Date.now();
+  c.front = { text: "", images: [] };
+  c.back = { text: "", images: [] };
+  await putCard(c);
+}
+
+/* Uploaded photos are shrunk before they are stored.
+
+   A phone camera produces 3-5MB per shot, which is far more detail than a
+   picture of an exam question needs — the question crops shipped with this app
+   are at most 1400px wide and perfectly legible. Downscaling keeps the local
+   store small and, once cards sync to a repo, keeps every image under the 1MB
+   boundary below which GitHub returns file content inline. */
+const MAX_EDGE = 1600;
+const WEBP_QUALITY = 0.85;
+
+function shrinkImage(file){
+  return new Promise(resolve => {
+    if (!file.type.startsWith("image/") || file.type === "image/gif")
+      return resolve(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+      if (scale === 1 && file.size < 400000){        // already small enough
+        URL.revokeObjectURL(url);
+        return resolve(file);
+      }
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * scale);
+      cv.height = Math.round(img.height * scale);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => {
+        URL.revokeObjectURL(url);
+        /* keep the original if the re-encode somehow came out larger */
+        resolve(b && b.size < file.size ? b : file);
+      }, "image/webp", WEBP_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
 }
 
 /* store an uploaded File and hand back a reference to it */
 async function storeBlob(file){
   const id = uid();
-  await dbPut("blobs", { id, blob: file });
+  const blob = await shrinkImage(file);
+  await dbPut("blobs", { id, blob });
   return { kind: "blob", id };
 }
 
@@ -255,19 +320,19 @@ function todayKey(d = new Date()){ return d.toISOString().slice(0, 10); }
 
 function studiedToday(){
   const k = todayKey();
-  return CARDS.reduce((n, c) =>
+  return visibleCards().reduce((n, c) =>
     n + (c.history || []).filter(h => todayKey(new Date(h.ts)) === k).length, 0);
 }
 
 function newSeenToday(){
   const k = todayKey();
-  return CARDS.filter(c => (c.history || []).some(h =>
+  return visibleCards().filter(c => (c.history || []).some(h =>
     h.first && todayKey(new Date(h.ts)) === k)).length;
 }
 
 function queueFor(filter){
   const now = Date.now();
-  const pool = CARDS.filter(filter || (() => true));
+  const pool = visibleCards().filter(filter || (() => true));
   const due = pool.filter(c => c.srs.state !== "new" && c.srs.due <= now)
                   .sort((a, b) => a.srs.due - b.srs.due);
   const fresh = pool.filter(c => c.srs.state === "new")
@@ -277,7 +342,7 @@ function queueFor(filter){
 
 function streak(){
   const days = new Set();
-  CARDS.forEach(c => (c.history || []).forEach(h => days.add(todayKey(new Date(h.ts)))));
+  visibleCards().forEach(c => (c.history || []).forEach(h => days.add(todayKey(new Date(h.ts)))));
   let n = 0;
   const d = new Date();
   /* today not yet studied should not break a run that is still alive */
@@ -306,6 +371,7 @@ function drawBank(){
   if (panel) panel.classList.toggle("studying", bankTab === "study" && !!studyState);
   if (bankTab === "study") drawStudy(host);
   else if (bankTab === "cards") drawCardList(host);
+  else if (bankTab === "stats") drawStats(host);
   else drawEditor(host);
   drawBackupNote();
   const n = queueFor().length;
@@ -317,7 +383,7 @@ function drawBackupNote(){
   const el = $("#backupnote");
   if (!el) return;
   const stale = !PREFS.lastExport || (Date.now() - PREFS.lastExport) > 30 * DAY;
-  const show = CARDS.length > 0 && stale && !PREFS.hideBackupNote;
+  const show = visibleCards().length > 0 && stale && !PREFS.hideBackupNote;
   el.classList.toggle("hidden", !show);
   if (show && !el.dataset.wired){
     el.dataset.wired = "1";
@@ -330,12 +396,12 @@ function drawBackupNote(){
 /* ---------- study -------------------------------------------------------- */
 function drawStudy(host){
   const due = queueFor().length;
-  const total = CARDS.length;
+  const total = visibleCards().length;
   const newLeft = Math.max(0, PREFS.newPerDay - newSeenToday());
 
   if (!studyState){
     const byDeck = {};
-    CARDS.forEach(c => {
+    visibleCards().forEach(c => {
       const k = `${c.subject} · ${c.deck.module || "No module"}`;
       byDeck[k] = byDeck[k] || { due: 0, total: 0 };
       byDeck[k].total++;
@@ -354,7 +420,7 @@ function drawStudy(host){
       ${total === 0
         ? `<p class="empty">No cards yet. Mark an answer and save it, or add one under <b>Add card</b>.</p>`
         : due === 0
-          ? `<p class="empty">Nothing due. ${CARDS.filter(c=>c.srs.state==="new").length
+          ? `<p class="empty">Nothing due. ${visibleCards().filter(c=>c.srs.state==="new").length
               ? "You have hit today's new-card limit — raise it below or come back tomorrow."
               : "Everything is scheduled ahead; come back later."}</p>`
           : `<button class="go" id="startstudy">Study ${due} card${due===1?"":"s"}</button>`}
@@ -401,7 +467,7 @@ function drawStudy(host){
 /* `ignoreSchedule` powers custom study: take the cards regardless of due date */
 function beginStudy(filter, label, ignoreSchedule){
   const pool = ignoreSchedule
-    ? shuffleCards(CARDS.filter(filter || (() => true)))
+    ? shuffleCards(visibleCards().filter(filter || (() => true)))
     : queueFor(filter);
   if (!pool.length){ return; }
   studyState = { queue: pool, i: 0, revealed: false, label };
@@ -427,6 +493,7 @@ async function drawReviewer(host){
     return;
   }
   const c = st.queue[st.i];
+  if (st.shownAt == null) st.shownAt = Date.now();
   const prev = previewIntervals(c.srs);
   const frontImgs = await imagesHTML(c.front.images, "cardimg");
   const backImgs  = await imagesHTML(c.back.images, "cardimg");
@@ -475,13 +542,20 @@ async function rate(r){
   if (!st || !st.revealed) return;
   const c = st.queue[st.i];
   const first = (c.history || []).length === 0;
+  /* capped so a card left open over lunch does not distort the averages */
+  const ms = Math.min(Date.now() - (st.shownAt || Date.now()), 5 * MIN);
+  /* recorded before scheduling: rating Again resets the interval to zero, so
+     the interval afterwards cannot tell a lapse from a card still in learning,
+     and retention computed from it could never drop below 100% */
+  const wasReview = c.srs.state === "review";
   c.srs = schedule(c.srs, r);
-  c.history = (c.history || []).concat({ ts: Date.now(), rating: r, interval: c.srs.interval, first });
+  c.history = (c.history || []).concat({ ts: Date.now(), rating: r, interval: c.srs.interval, first, ms, wasReview });
   await putCard(c);
   /* Again keeps the card in this session, as Anki does */
   if (r === 1) st.queue.push(c);
   st.i += 1;
   st.revealed = false;
+  st.shownAt = null;
   drawBank();
 }
 
@@ -495,6 +569,125 @@ document.addEventListener("keydown", e => {
     e.preventDefault(); rate(+e.key);
   }
 });
+
+/* ---------- statistics and the activity heatmap (brief §31, §32) ----------
+   Everything here is derived from each card's review history, so no extra
+   state is stored beyond the per-answer duration recorded in rate(). */
+
+function reviewsByDay(){
+  const out = {};
+  visibleCards().forEach(c => (c.history || []).forEach(h => {
+    const k = todayKey(new Date(h.ts));
+    out[k] = (out[k] || 0) + 1;
+  }));
+  return out;
+}
+
+function statsSummary(){
+  const cards = visibleCards();
+  const all = cards.flatMap(c => (c.history || []).map(h => ({ ...h, state: c.srs.state })));
+  const today = todayKey();
+  const todays = all.filter(h => todayKey(new Date(h.ts)) === today);
+
+  /* retention counts only reviews of cards already past the learning steps:
+     getting a brand-new card wrong is not forgetting, it is meeting it for the
+     first time. A review is "retained" when it was not rated Again. wasReview
+     is recorded before scheduling; entries written before that existed fall
+     back to the resulting interval, which understates lapses slightly. */
+  const mature = all.filter(h => h.wasReview ?? (h.interval >= 1));
+  const retained = mature.filter(h => h.rating > 1).length;
+
+  const timed = all.filter(h => typeof h.ms === "number" && h.ms > 0);
+  const tomorrow = Date.now() + DAY;
+
+  return {
+    studiedToday: todays.length,
+    timeToday: todays.reduce((n, h) => n + (h.ms || 0), 0),
+    dueTomorrow: cards.filter(c => c.srs.state !== "new" && c.srs.due <= tomorrow).length,
+    total: cards.length,
+    reviewsTotal: all.length,
+    retention: mature.length ? retained / mature.length : null,
+    learned: cards.filter(c => c.srs.state === "review").length,
+    lapses: cards.reduce((n, c) => n + (c.srs.lapses || 0), 0),
+    avgMs: timed.length ? timed.reduce((n, h) => n + h.ms, 0) / timed.length : null,
+    streak: streak(),
+    perDay: all.length && Object.keys(reviewsByDay()).length
+      ? all.length / Object.keys(reviewsByDay()).length : 0,
+  };
+}
+
+const fmtDuration = ms => {
+  if (!ms) return "0m";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + "s";
+  const m = Math.round(s / 60);
+  return m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+};
+
+function heatmapHTML(){
+  const counts = reviewsByDay();
+  const weeks = 26;
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  /* start on the Sunday at or before the first day shown, so columns are weeks */
+  const start = new Date(end);
+  start.setDate(start.getDate() - (weeks * 7 - 1));
+  start.setDate(start.getDate() - start.getDay());
+
+  const max = Math.max(1, ...Object.values(counts));
+  const cells = [];
+  const months = [];
+  let seenMonth = -1;
+  for (let d = new Date(start), col = 0; d <= end; d.setDate(d.getDate() + 1)){
+    const k = todayKey(d);
+    const n = counts[k] || 0;
+    const level = n === 0 ? 0 : Math.min(4, 1 + Math.floor((n / max) * 3.99));
+    cells.push(`<i class="hc l${level}" title="${k}: ${n} review${n===1?"":"s"}"></i>`);
+    if (d.getDay() === 0){
+      col++;
+      if (d.getMonth() !== seenMonth){
+        seenMonth = d.getMonth();
+        months.push(`<span style="grid-column:${col}">${d.toLocaleString(undefined,{month:"short"})}</span>`);
+      }
+    }
+  }
+  return `<div class="heat">
+    <div class="hmonths">${months.join("")}</div>
+    <div class="hgrid">${cells.join("")}</div>
+    <div class="hkey"><span>Less</span><i class="hc l0"></i><i class="hc l1"></i><i class="hc l2"></i><i class="hc l3"></i><i class="hc l4"></i><span>More</span></div>
+  </div>`;
+}
+
+function drawStats(host){
+  const s = statsSummary();
+  if (!s.total){
+    host.innerHTML = `<p class="empty">No cards yet, so there is nothing to measure.</p>`;
+    return;
+  }
+  const pct = v => v == null ? "—" : Math.round(v * 100) + "%";
+  host.innerHTML = `
+    <div class="dash">
+      <div class="stat"><b>${s.studiedToday}</b><span>reviewed today</span></div>
+      <div class="stat"><b>${fmtDuration(s.timeToday)}</b><span>studied today</span></div>
+      <div class="stat"><b>${s.streak}</b><span>day streak</span></div>
+      <div class="stat"><b>${s.dueTomorrow}</b><span>due by tomorrow</span></div>
+      <div class="stat"><b>${s.total}</b><span>cards</span></div>
+    </div>
+    <div class="dash">
+      <div class="stat"><b>${pct(s.retention)}</b><span>retention</span></div>
+      <div class="stat"><b>${s.learned}</b><span>learned</span></div>
+      <div class="stat"><b>${s.lapses}</b><span>forgotten</span></div>
+      <div class="stat"><b>${s.avgMs == null ? "—" : fmtDuration(s.avgMs)}</b><span>avg answer</span></div>
+      <div class="stat"><b>${s.reviewsTotal}</b><span>reviews all up</span></div>
+    </div>
+    <p class="note" style="margin:14px 0 6px">
+      Retention is the share of reviews of cards you already knew that you did not rate
+      <b>Again</b>${s.retention == null ? " — nothing has reached that stage yet" : ""}.
+      Averaging ${s.perDay.toFixed(1)} reviews on the days you studied.
+    </p>
+    <p class="sec" style="margin:20px 0 8px">Activity, last 26 weeks</p>
+    ${heatmapHTML()}`;
+}
 
 /* ---------- card browser ------------------------------------------------- */
 const listState = { q: "", subject: "", module: "", starred: false, sort: "created" };
@@ -519,10 +712,11 @@ function dueLabel(c){
 }
 
 function drawCardList(host){
-  const subs = [...new Set(CARDS.map(c => c.subject))].sort();
-  const mods = [...new Set(CARDS.filter(c => !listState.subject || c.subject === listState.subject)
+  const shown = visibleCards();
+  const subs = [...new Set(shown.map(c => c.subject))].sort();
+  const mods = [...new Set(shown.filter(c => !listState.subject || c.subject === listState.subject)
                                .map(c => c.deck.module).filter(Boolean))].sort();
-  const rows = CARDS.filter(cardMatches);
+  const rows = shown.filter(cardMatches);
   rows.sort((a, b) => listState.sort === "due" ? a.srs.due - b.srs.due : b.created - a.created);
 
   host.innerHTML = `
@@ -538,7 +732,7 @@ function drawCardList(host){
         <option value="due" ${listState.sort==="due"?"selected":""}>Due first</option>
       </select>
     </div>
-    <p class="count">${rows.length} of ${CARDS.length} card${CARDS.length===1?"":"s"}</p>
+    <p class="count">${rows.length} of ${shown.length} card${shown.length===1?"":"s"}</p>
     <div class="ctable">${rows.length ? rows.map(c => `
       <div class="crow" data-id="${esc(c.id)}">
         <span class="cstar ${c.starred?"on":""}" data-star="${esc(c.id)}">${c.starred?"★":"☆"}</span>
@@ -579,7 +773,7 @@ function ensureDraft(){
 
 async function drawEditor(host){
   const c = ensureDraft();
-  const isEdit = CARDS.some(x => x.id === c.id);
+  const isEdit = visibleCards().some(x => x.id === c.id);
   const mods = MODULE_LIST(c.subject);
   const frontImgs = await imagesHTML(c.front.images, "thumb");
   const backImgs  = await imagesHTML(c.back.images, "thumb");
@@ -753,7 +947,7 @@ async function exportCards(){
   const blobs = await dbAll("blobs");
   const images = {};
   for (const b of blobs) images[b.id] = await blobToDataURL(b.blob);
-  const payload = { format: "hsc-cards", version: 1, exported: Date.now(),
+  const payload = { format: "hsc-cards", version: 2, exported: Date.now(),
                     cards: CARDS, images };
   const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: "application/json" }));
   const a = document.createElement("a");
@@ -763,6 +957,39 @@ async function exportCards(){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   PREFS.lastExport = Date.now(); PREFS.hideBackupNote = false; savePrefs();
   drawBank();
+}
+
+/* One rule for combining someone else's copy of the collection with this one,
+   used by both file import and repo sync.
+
+   The old version compared only the timestamp of the last review, so an edit
+   that changed a card's text, tags or module without reviewing it never
+   travelled. Cards now carry updatedAt and that decides, with the history
+   check kept as a fallback for version-1 export files that predate it. */
+function newerThan(inc, mine){
+  if (inc.updatedAt || mine.updatedAt)
+    return (inc.updatedAt || 0) > (mine.updatedAt || 0);
+  const last = c => (c.history || []).length ? c.history[c.history.length - 1].ts : 0;
+  return last(inc) > last(mine);
+}
+
+async function mergeIncoming(incoming){
+  let added = 0, updated = 0, unchanged = 0;
+  for (const inc of incoming || []){
+    const mine = CARDS.find(c => c.id === inc.id);
+    if (!mine){
+      /* tombstones are added too: a card deleted elsewhere must stay deleted
+         here rather than being recreated on the next sync */
+      await putCardRaw(inc);
+      added++;
+    } else if (newerThan(inc, mine)){
+      await putCardRaw(inc);
+      updated++;
+    } else {
+      unchanged++;
+    }
+  }
+  return { added, updated, unchanged };
 }
 
 async function importCards(file){
@@ -777,17 +1004,10 @@ async function importCards(file){
     const blob = await (await fetch(dataUrl)).blob();
     await dbPut("blobs", { id, blob });
   }
-  let added = 0, updated = 0;
-  for (const inc of data.cards){
-    const mine = CARDS.find(c => c.id === inc.id);
-    if (!mine){ await putCard(inc); added++; continue; }
-    const incLast = (inc.history || []).length ? inc.history[inc.history.length-1].ts : 0;
-    const myLast  = (mine.history || []).length ? mine.history[mine.history.length-1].ts : 0;
-    if (incLast > myLast){ await putCard(inc); updated++; }
-  }
+  const r = await mergeIncoming(data.cards);
   await loadCards();
   drawBank();
-  return { added, updated, total: data.cards.length };
+  return { ...r, total: data.cards.length };
 }
 
 /* ---------- the save panel the marker shows after a mark ------------------ */
@@ -868,6 +1088,18 @@ async function initCards(){
 
 /* the reviewer counts and the due badge follow the subject, so redraw on both */
 APP.onView.push(v => { if (v === "bank") drawBank(); else releaseUrls(); });
+
+/* the surface sync.js works through, so the two files stay decoupled */
+window.cardsAPI = {
+  mergeIncoming,
+  putCardRaw,
+  allCards: () => CARDS,                 // tombstones included: deletions must travel
+  reload: async () => { await loadCards(); drawBank(); },
+  redraw: () => drawBank(),
+  hasBlob: async id => !!(await dbGet("blobs", id)),
+  getBlob: async id => (await dbGet("blobs", id))?.blob || null,
+  putBlob: (id, blob) => dbPut("blobs", { id, blob }),
+};
 
 window.renderSavePanel = renderSavePanel;
 /* marker.js hands over File objects the user attached; they become blobs here */

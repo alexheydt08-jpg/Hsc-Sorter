@@ -287,10 +287,45 @@
         Your cards live in this browser only. Clearing site data deletes them — export a copy to keep them safe.
       </p>
 
-      <nav class="modes" id="banktabs" role="group" aria-label="Flashcard section">
+      <details class="optional syncbox" id="syncbox">
+        <summary>Sync across devices <span class="note">— optional</span></summary>
+        <div class="field">
+          <div id="syncsetup">
+            <p class="note" style="margin:0 0 10px">
+              Keeps the same cards on every device, through a private GitHub repository you own.
+              Two things to set up once:<br>
+              1. Create an empty <b>private</b> repository on GitHub — any name, e.g. <code>hsc-flashcards</code>.<br>
+              2. Make a <b>fine-grained personal access token</b> with <b>Contents: read and write</b>
+                 on that one repository, and paste it here. Each device needs its own token;
+                 point them all at the same repository.
+            </p>
+            <div class="keyrow">
+              <input id="syncrepo" type="text" placeholder="owner/repository" autocomplete="off" spellcheck="false">
+              <input id="synctoken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+              <button type="button" class="btn primary" id="syncsave">Connect</button>
+            </div>
+            <p class="note" style="margin:8px 0 0">
+              The token is kept in this browser only, exactly like the Anthropic key, and is never
+              written into the repository.
+            </p>
+          </div>
+          <div id="syncon" class="hidden">
+            <div class="keyrow">
+              <span class="syncrepolabel" id="syncrepolabel"></span>
+              <span class="note" id="syncwhen"></span>
+              <button type="button" class="btn" id="syncnow">Sync now</button>
+              <button type="button" class="btn danger" id="syncoff">Disconnect</button>
+            </div>
+          </div>
+          <p class="notice warn hidden" id="syncerr" style="margin-top:10px"></p>
+        </div>
+      </details>
+
+      <nav class="modes four" id="banktabs" role="group" aria-label="Flashcard section">
         <button type="button" data-tab="study" aria-pressed="true">Study</button>
         <button type="button" data-tab="cards" aria-pressed="false">Cards</button>
         <button type="button" data-tab="add" aria-pressed="false">Add card</button>
+        <button type="button" data-tab="stats" aria-pressed="false">Stats</button>
       </nav>
 
       <div id="bankbody"></div>
@@ -314,5 +349,6 @@
 <script src="sorter.js"></script>
 <script src="marker.js"></script>
 <script src="cards.js"></script>
+<script src="sync.js"></script>
 </body>
 </html>

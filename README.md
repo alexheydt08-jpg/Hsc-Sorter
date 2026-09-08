@@ -88,6 +88,10 @@ tabs:
 - **Add card** — type or paste a question and an answer, attach or drop images
   into either side, pick a module and tick any inquiry questions that apply.
   Saving leaves the form open so the next card can go straight in.
+- **Stats** — reviewed today, time studied, streak, due tomorrow, retention,
+  cards learned and forgotten, average answer time, and a 26-week activity
+  heatmap. Retention counts only reviews of cards that had already left the
+  learning steps: meeting a new card and getting it wrong is not forgetting.
 
 Scheduling is SM-2, the algorithm Anki derives from: each card carries an ease
 factor that falls when you get it wrong and rises when it is easy, and the next
@@ -101,6 +105,41 @@ where they exist, the official option for multiple choice, otherwise the
 marker's account of what the marks needed, which the card says plainly so you
 can correct it. The module and inquiry questions arrive already selected when
 the question came from Browse.
+
+## Sync across devices
+
+Optional, set up under **Bank → Sync across devices**. Every device keeps the
+same collection through **a private GitHub repository you own** — no server, the
+browser talks to `api.github.com` directly.
+
+Two steps, once: create an empty private repository, then a **fine-grained
+personal access token** with *Contents: read and write* **on that repository
+only**. Each device gets its own token and points at the same repository. The
+token lives in that browser's `localStorage`, exactly like the Anthropic key,
+and is never written into the repository.
+
+The repo holds `cards.json` — every card, its scheduling and its review history
+— plus one file per uploaded picture under `images/`, written once and never
+rewritten. Syncing runs when the Bank is opened, a few seconds after an edit,
+and on demand from **Sync now**.
+
+A note on why a repository and not a gist: a "secret" gist is only *unlisted*,
+so anyone holding the URL can read it, and the Gists API still requires a
+classic token whose scope covers **every** gist on the account. A private repo
+is genuinely private and the token can be scoped to it alone.
+
+Deleting a card leaves a tombstone rather than removing the row, because a
+deletion has to be able to travel — otherwise the other device cannot tell
+"deleted here" from "not created here yet" and sends the card straight back.
+Tombstones are purged after 60 days.
+
+Where two devices edit the same card before either syncs, the later edit wins
+for that card as a whole. Sync is not instant and is not a live connection.
+
+Uploaded photos are downscaled to 1600px on the long edge and re-encoded as
+WebP when they are added — a phone photo of a question becomes a couple of
+hundred kilobytes with no loss of legibility, which keeps the local store small
+and every image inside the size GitHub returns inline.
 
 Cards live in this browser's IndexedDB, which is what makes photo cards
 possible — `localStorage` holds about 5 MB of text and a single phone photo
@@ -175,6 +214,7 @@ app.js       shared shell: the subject, the section tabs
 sorter.js    browse, filters, the tree, the practice-test maker
 marker.js    the marker and the Anthropic call
 cards.js     flashcards: IndexedDB store, SM-2 scheduling, the Bank views
+sync.js      optional sync of the collection through a private GitHub repo
 data.js      the 498 NESA HSC questions (window.QDATA)
 data.json    the same data as plain JSON, for reuse
 trials.js    the 2365 trial-paper questions (window.TDATA)
