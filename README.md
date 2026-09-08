@@ -73,8 +73,44 @@ exam paper by question number. Supplying the real marking guidelines makes the
 marks match NESA exactly; leave them out and it builds an HSC-style breakdown
 itself and says so.
 
-**Bank** — every marked response you save, filtered by subject and module, with
-your answer, the comment and the fixes. Export and import it as JSON.
+**Bank** — a spaced-repetition flashcard system, in the style of Anki. Three
+tabs:
+
+- **Study** — a dashboard of what is due, new cards left today, reviews done and
+  your streak, then the reviewer itself: the question, *Show answer* (or the
+  space bar), and *Again / Hard / Good / Easy* rating each card, with keys 1–4.
+  While a card is up everything else on the page is hidden. Custom study can
+  run through starred cards, cards you keep forgetting, or the whole collection
+  shuffled.
+- **Cards** — the browser: search across questions, answers, notes and tags,
+  filter by subject, module or starred, sort by newest or by due date, then
+  edit or delete. Editing a card keeps its review history.
+- **Add card** — type or paste a question and an answer, attach or drop images
+  into either side, pick a module and tick any inquiry questions that apply.
+  Saving leaves the form open so the next card can go straight in.
+
+Scheduling is SM-2, the algorithm Anki derives from: each card carries an ease
+factor that falls when you get it wrong and rises when it is easy, and the next
+gap is the last one multiplied by that ease. A forgotten card drops back to a
+one-minute step and returns in the same session; a card you know goes 1 day, 6
+days, then further out each time.
+
+Marking an answer offers to save it as a card. The question and its image go on
+the front, and **the correct answer goes on the back** — the marking guidelines
+where they exist, the official option for multiple choice, otherwise the
+marker's account of what the marks needed, which the card says plainly so you
+can correct it. The module and inquiry questions arrive already selected when
+the question came from Browse.
+
+Cards live in this browser's IndexedDB, which is what makes photo cards
+possible — `localStorage` holds about 5 MB of text and a single phone photo
+would fill it. Images already in this repository are stored as paths rather
+than copies, so a card made from a past question costs nothing. **Export**
+writes the whole collection, review history and images included, to one file;
+**Import** merges it back and keeps whichever side has the later review, so
+carrying a laptop collection to a phone never wipes the phone's progress.
+Nothing syncs on its own — there is no server — so the Bank asks you to export
+now and again.
 
 ## What ties the two halves together
 
@@ -137,7 +173,8 @@ syllabus.js  NESA module and inquiry-question order, used to sort the tree
 app.css      the whole design system
 app.js       shared shell: the subject, the section tabs
 sorter.js    browse, filters, the tree, the practice-test maker
-marker.js    the marker, the Anthropic call, the bank
+marker.js    the marker and the Anthropic call
+cards.js     flashcards: IndexedDB store, SM-2 scheduling, the Bank views
 data.js      the 498 NESA HSC questions (window.QDATA)
 data.json    the same data as plain JSON, for reuse
 trials.js    the 2365 trial-paper questions (window.TDATA)

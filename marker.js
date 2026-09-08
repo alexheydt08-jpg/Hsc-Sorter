@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AI marker and the bank of everything marked.
+   AI marker. Saving a marked question as a flashcard is handed to cards.js.
 
    There is no server: this calls the Anthropic API straight from the browser
    with a key you paste in, kept in this browser's localStorage. No key is ever
@@ -11,7 +11,6 @@
 const MAX_TOKENS = 4000;
 const MAX_FILE_MB = 28;
 const KEY_STORAGE = "hsc-marker-key";
-const BANK_KEY = "hsc-marker-bank";
 const UNSET = "Not set";
 
 /* Modules as named in the NESA Stage 6 syllabuses. Adding a subject means
@@ -516,50 +515,17 @@ function showResult(r){
     ${rows ? `<p class="sec">Mark by mark</p><ul class="crit">${rows}</ul>` : ""}
     ${r.feedback ? `<p class="sec">Marker's comment</p><div class="comment">${esc(r.feedback)}</div>` : ""}
     ${r.tips.length ? `<p class="sec">To pick up the remaining marks</p><ul class="tips">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
-    ${flagBlock(r)}
+    <div id="savehost"></div>
   `;
-  fillModules($("#fmodsel"), r.subject in MODULES ? r.subject : APP.subject, false);
-  /* if it came from Browse we already know the module — preselect it */
-  if (fromSorter?.tags?.length){
-    const want = fromSorter.tags[0].module.toLowerCase();
-    const opt = Array.from($("#fmodsel").options).find(o => o.value.toLowerCase() === want);
-    if (opt) $("#fmodsel").value = opt.value;
-  }
-  $("#fsave").addEventListener("click", () => saveToBank(r));
+  saveBlock(r);
   $("#copy").classList.remove("hidden");
 }
 
 /* ==========================================================================
-   BANK
+   SAVING TO FLASHCARDS
+   Storage, scheduling and the Bank views live in cards.js; this half only has
+   to hand over the question, the correct answer and where they belong.
    ========================================================================== */
-let bank = [];
-let memoryOnly = false;
-
-const store = {
-  read(){
-    try { const v = localStorage.getItem(BANK_KEY); return v ? JSON.parse(v) : []; }
-    catch { memoryOnly = true; return []; }
-  },
-  write(data){
-    try { localStorage.setItem(BANK_KEY, JSON.stringify(data)); return true; }
-    catch { memoryOnly = true; return false; }
-  }
-};
-
-function saveBank(){ store.write(bank); drawCount(); }
-function drawCount(){ $("#bankcount").textContent = String(bank.length); }
-
-function fillModules(select, subject, includeAll){
-  if (!select) return;
-  select.textContent = "";
-  const add = (v, label) => {
-    const o = document.createElement("option");
-    o.value = v; o.textContent = label; select.appendChild(o);
-  };
-  if (includeAll) add("", "All modules");
-  (MODULES[subject] || []).forEach(m => add(m, m));
-  add(UNSET, UNSET);
-}
 
 function currentQuestionText(){
   if (fromSorter)
@@ -573,179 +539,78 @@ function currentQuestionText(){
   return $("#mq").value.trim() || (files.question[0]?.name ? `Attached: ${files.question[0].name}` : "Attached question");
 }
 
-function currentAnswerText(){
-  const t = (mode === "paper" ? $("#pa").value : mode === "combined" ? "" : $("#ma").value).trim();
-  if (t) return t;
-  const slot = mode === "paper" ? "paperanswer" : mode === "combined" ? "combined" : "answer";
-  return files[slot][0]?.name ? `Attached: ${files[slot].map(f => f.name).join(", ")}` : "";
+/* A card is only worth reviewing if its back is the right answer, so the
+   guidelines are preferred over the student's own attempt. Failing those, the
+   marker's account of what the remaining marks needed is the closest thing to
+   a model answer, and the card says so. */
+function backForCard(r){
+  const out = { text: "", images: [], note: "" };
+
+  if (fromSorter){
+    if (fromSorter.section === "I" && fromSorter.answer)
+      out.text = `Correct option: ${fromSorter.answer}`;
+    if (fromSorter.mgText) out.text = (out.text ? out.text + "\n\n" : "") + fromSorter.mgText;
+    for (const p of (fromSorter.mgImages || [])) out.images.push({ kind: "repo", src: p });
+  }
+  const typed = $("#g").value.trim();
+  if (typed) out.text = (out.text ? out.text + "\n\n" : "") + typed;
+
+  if (out.text || out.images.length || files.guidelines.length){
+    out.note = "The marking guidelines go on the back.";
+    return out;
+  }
+  /* nothing official: fall back to the marker's own account */
+  const parts = [];
+  if (r?.tips?.length) parts.push(r.tips.map(t => "• " + t).join("\n"));
+  if (r?.feedback) parts.push(r.feedback);
+  out.text = parts.join("\n\n");
+  out.note = "No official answer was available, so the back holds the marker's account of what the marks needed. Edit the card to correct it.";
+  return out;
 }
 
-function flagBlock(r){
-  const full = r.max != null && r.total >= r.max;
-  return `<div class="flag" id="flag">
-    <p class="t">${full ? "Full marks — save it anyway?" : "Dropped marks here"}</p>
-    <p class="d">${full
-      ? "Keep it in the bank if it is worth coming back to."
-      : "Pick the module and this goes into your bank to redo later."}</p>
-    <div class="pick">
-      <select id="fmodsel" aria-label="Module"></select>
-      <button type="button" class="btn" id="fsave">Save to bank</button>
-    </div>
-  </div>`;
+function frontForCard(){
+  const front = { text: currentQuestionText(), images: [] };
+  for (const p of (fromSorter?.questionImages || [])) front.images.push({ kind: "repo", src: p });
+  return front;
 }
 
-function saveToBank(r){
-  bank.unshift({
-    id: String(Date.now()) + Math.random().toString(36).slice(2,7),
-    ts: Date.now(),
-    subject: r.subject || APP.subject,
-    module: $("#fmodsel")?.value || UNSET,
-    total: r.total, max: r.max,
-    question: currentQuestionText(),
-    answer: currentAnswerText(),
-    feedback: r.feedback,
-    tips: r.tips,
-    rows: r.rows,
-    source: fromSorter ? { id: fromSorter.id, year: fromSorter.year, q: fromSorter.questionNumber } : null
-  });
-  saveBank();
-  const el = $("#flag");
-  if (el){
-    el.classList.add("saved");
-    el.innerHTML = `<p class="t">Saved to your bank</p><p class="d" style="margin:0">Find it under Bank, filtered by subject and module.</p>`;
+function cardTags(){
+  const t = [];
+  if (fromSorter){
+    t.push(fromSorter.source === "Trial" ? "Trial" : "HSC");
+    if (fromSorter.year) t.push(String(fromSorter.year));
+    if (fromSorter.school) t.push(fromSorter.school);
   }
-  drawBank();
+  return t;
 }
 
-function drawBank(){
-  const list = $("#banklist");
-  const fs = $("#fsub").value, fm = $("#fmod").value;
-  const shownEntries = bank.filter(e => (!fs || e.subject === fs) && (!fm || e.module === fm));
+/* images the user attached rather than pulled from Browse have to be copied
+   into the card store, which cards.js does; hand it the File objects */
+async function uploadedImages(slot){
+  if (!window.storeUploaded) return [];
+  const out = [];
+  for (const f of files[slot]) if (f.type.startsWith("image/")) out.push(await window.storeUploaded(f));
+  return out;
+}
 
-  list.textContent = "";
+async function saveBlock(r){
+  const host = $("#savehost");
+  if (!host || !window.renderSavePanel) return;
+  const front = frontForCard();
+  const back = backForCard(r);
+  if (!front.images.length) front.images = await uploadedImages(mode === "combined" ? "combined" : "question");
+  if (!back.images.length)  back.images  = await uploadedImages("guidelines");
 
-  if (!bank.length){
-    list.innerHTML = `<p class="empty">Nothing banked yet. Whenever a response drops marks, save it here and it stacks up into a set of questions worth redoing.</p>`;
-    return;
-  }
-  if (!shownEntries.length){
-    list.innerHTML = `<p class="empty">No questions match this filter. Widen it to see the rest of your bank.</p>`;
-    return;
-  }
-
-  shownEntries.forEach(e => {
-    const wrap = document.createElement("div");
-    wrap.className = "entry";
-    const cls = e.max != null && e.total >= e.max ? "won"
-              : e.max != null && e.total > 0 ? "part" : "";
-    const when = new Date(e.ts).toLocaleDateString(undefined, { day:"numeric", month:"short", year:"numeric" });
-
-    const top = document.createElement("button");
-    top.type = "button"; top.className = "top";
-    top.setAttribute("aria-expanded", "false");
-    top.innerHTML = `
-      <span class="score ${cls}">${esc(e.total)}/${e.max != null ? esc(e.max) : "?"}</span>
-      <span class="mid">
-        <span class="qt">${esc(e.question)}</span>
-        <span class="meta">${esc(e.subject)} · ${esc(e.module)} · ${esc(when)}</span>
-      </span>
-      <span class="chev">▾</span>`;
-
-    const more = document.createElement("div");
-    more.className = "more hidden";
-    more.innerHTML = `
-      ${e.answer ? `<h4>Your answer</h4><p>${esc(e.answer)}</p>` : ""}
-      ${e.feedback ? `<h4>Marker's comment</h4><p class="fb">${esc(e.feedback)}</p>` : ""}
-      ${e.tips?.length ? `<h4>To fix</h4><ul class="tips" style="margin-bottom:13px">${e.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}`;
-
-    /* a banked question that came from Browse can be reopened there */
-    if (e.source?.id && DATA.some(r => r.id === e.source.id)){
-      const again = document.createElement("button");
-      again.type = "button"; again.className = "rm";
-      again.style.marginRight = "14px";
-      again.textContent = "Try it again";
-      again.addEventListener("click", () => {
-        const rec = DATA.find(r => r.id === e.source.id);
-        if (rec) sendToMarker(rec);
-      });
-      more.appendChild(again);
-    }
-
-    const rm = document.createElement("button");
-    rm.type = "button"; rm.className = "rm"; rm.textContent = "Remove from bank";
-    rm.addEventListener("click", () => {
-      bank = bank.filter(x => x.id !== e.id);
-      saveBank(); drawBank();
-    });
-    more.appendChild(rm);
-
-    top.addEventListener("click", () => {
-      const open = more.classList.toggle("hidden");
-      top.setAttribute("aria-expanded", String(!open));
-      top.querySelector(".chev").textContent = open ? "▾" : "▴";
-    });
-
-    wrap.append(top, more);
-    list.appendChild(wrap);
+  window.renderSavePanel(host, {
+    subject: r?.subject || APP.subject,
+    front, back,
+    notes: r?.feedback || "",
+    tags: cardTags(),
+    module: fromSorter?.tags?.[0]?.module || "",
+    iqs: (fromSorter?.tags || []).map(t => t.iq).filter(Boolean),
+    backNote: back.note,
   });
 }
-
-function initBankFilters(){
-  const fs = $("#fsub");
-  fs.innerHTML = `<option value="">All subjects</option>` +
-    Object.keys(MODULES).map(s => `<option value="${s}">${s}</option>`).join("");
-  fs.addEventListener("change", () => {
-    const s = fs.value;
-    if (s) fillModules($("#fmod"), s, true);
-    else {
-      $("#fmod").innerHTML = `<option value="">All modules</option>` +
-        Object.values(MODULES).flat().map(m => `<option value="${m}">${m}</option>`).join("") +
-        `<option value="${UNSET}">${UNSET}</option>`;
-    }
-    drawBank();
-  });
-  fs.dispatchEvent(new Event("change"));
-  $("#fmod").addEventListener("change", drawBank);
-}
-
-$("#bexport").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(bank, null, 2)], { type:"application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `hsc-bank-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-});
-
-$("#bimport").addEventListener("change", e => {
-  const f = e.target.files?.[0];
-  if (!f) return;
-  const r = new FileReader();
-  r.onload = () => {
-    let incoming;
-    try { incoming = JSON.parse(String(r.result)); } catch { incoming = null; }
-    if (!Array.isArray(incoming))
-      return void ($("#banklist").innerHTML = `<p class="empty">That file was not a bank export. Pick a file saved with Export.</p>`);
-    const ids = new Set(bank.map(x => x.id));
-    bank = bank.concat(incoming.filter(x => x && x.id && !ids.has(x.id)))
-               .sort((a,b) => (b.ts||0) - (a.ts||0));
-    saveBank(); drawBank();
-  };
-  r.readAsText(f);
-  e.target.value = "";
-});
-
-$("#bclear").addEventListener("click", function(){
-  if (this.dataset.armed !== "1"){
-    this.dataset.armed = "1";
-    this.textContent = "Tap again to confirm";
-    setTimeout(() => { this.dataset.armed = ""; this.textContent = "Delete all"; }, 4000);
-    return;
-  }
-  this.dataset.armed = ""; this.textContent = "Delete all";
-  bank = [];
-  saveBank(); drawBank();
-});
 
 /* ---------- actions ------------------------------------------------------ */
 $("#copy").addEventListener("click", async () => {
@@ -811,18 +676,4 @@ $("#go").addEventListener("click", async () => {
   }
 });
 
-APP.onView.push(v => { if (v === "bank") drawBank(); });
 
-/* ---------- start -------------------------------------------------------- */
-initBankFilters();
-bank = store.read();
-if (!Array.isArray(bank)) bank = [];
-drawCount();
-drawBank();
-if (memoryOnly){
-  const p = document.createElement("p");
-  p.className = "note";
-  p.style.cssText = "margin:10px 0 0;flex-basis:100%";
-  p.textContent = "This browser is blocking storage, so the bank will empty when you close the tab. Use Export to keep a copy.";
-  $(".bankfoot")?.appendChild(p);
-}

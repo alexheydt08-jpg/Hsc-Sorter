@@ -269,20 +269,31 @@
 <!-- ====================================================================== -->
 <div class="view hidden" id="view-bank">
   <section class="panel bankwrap">
-    <div class="head"><h2>Question bank — everything you've had marked</h2></div>
-    <div class="body">
-      <div class="bankbar">
-        <select id="fsub" aria-label="Filter by subject"></select>
-        <select id="fmod" aria-label="Filter by module"></select>
-      </div>
-      <div id="banklist"></div>
-      <div class="bankfoot">
-        <button type="button" class="btn" id="bexport">Export</button>
+    <div class="head">
+      <h2>Flashcards</h2>
+      <div class="tools">
+        <button type="button" class="btn" id="cexport">Export</button>
         <label class="btn" style="position:relative;overflow:hidden">Import
-          <input type="file" id="bimport" accept=".json,application/json" style="position:absolute;inset:0;opacity:0;cursor:pointer">
+          <input type="file" id="cimport" accept=".json,application/json"
+                 style="position:absolute;inset:0;opacity:0;cursor:pointer">
         </label>
-        <button type="button" class="btn danger sp" id="bclear">Delete all</button>
       </div>
+    </div>
+    <div class="body">
+      <p class="notice hidden" id="migrated"></p>
+      <p class="notice hidden" id="importmsg"></p>
+      <p class="notice warn hidden" id="backupnote">
+        <button type="button" class="x" aria-label="Dismiss">×</button>
+        Your cards live in this browser only. Clearing site data deletes them — export a copy to keep them safe.
+      </p>
+
+      <nav class="modes" id="banktabs" role="group" aria-label="Flashcard section">
+        <button type="button" data-tab="study" aria-pressed="true">Study</button>
+        <button type="button" data-tab="cards" aria-pressed="false">Cards</button>
+        <button type="button" data-tab="add" aria-pressed="false">Add card</button>
+      </nav>
+
+      <div id="bankbody"></div>
     </div>
   </section>
 </div>
@@ -302,5 +313,6 @@
 <script src="app.js"></script>
 <script src="sorter.js"></script>
 <script src="marker.js"></script>
+<script src="cards.js"></script>
 </body>
 </html>

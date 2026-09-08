@@ -374,30 +374,113 @@ details.optional .field{margin:12px 0 0}
 /* ==========================================================================
    BANK
    ========================================================================== */
-.bankwrap{max-width:860px}
-.bankbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.bankbar select{flex:1;min-width:150px;width:auto;font-size:14px;padding:7px 9px}
-.bankfoot{display:flex;gap:7px;flex-wrap:wrap;margin-top:20px;padding-top:15px;
-  border-top:1px solid var(--rule-2);align-items:center}
-.bankfoot .sp{margin-left:auto}
-.entry{border-top:1px solid var(--rule-2);padding:13px 0}
-.entry:first-child{border-top:0;padding-top:0}
-.entry .top{display:flex;gap:11px;align-items:flex-start;width:100%;background:none;
-  border:0;padding:0;text-align:left;cursor:pointer;font:inherit;color:inherit}
-.entry .score{flex:0 0 auto;font:500 14px var(--mono);color:var(--pen);
-  border:1.5px solid var(--pen);background:var(--pen-wash);padding:3px 8px}
-.entry .score.part{color:var(--part);border-color:var(--part);background:var(--part-wash)}
-.entry .score.won{color:var(--won);border-color:var(--won);background:var(--won-wash)}
-.entry .mid{flex:1;min-width:0}
-.entry .qt{display:-webkit-box;font-weight:450;margin-bottom:3px;overflow:hidden;
-  -webkit-line-clamp:2;-webkit-box-orient:vertical}
-.entry .meta{color:var(--ink-3);font-size:12.5px}
-.entry .chev{flex:0 0 auto;color:var(--ink-3);font-size:12px;padding-top:5px}
-.entry .more{margin-top:12px;padding-left:14px;border-left:2px solid var(--rule-2)}
-.entry .more h4{font:500 12.5px var(--sans);color:var(--ink-3);margin:0 0 5px}
-.entry .more p{margin:0 0 13px;font-size:14px;white-space:pre-wrap}
-.entry .more .fb{font:400 14.5px/1.6 var(--serif)}
-.entry .rm{background:none;border:0;color:var(--pen);font:450 13px var(--sans);cursor:pointer;padding:0}
+/* ==========================================================================
+   FLASHCARDS
+   ========================================================================== */
+.bankwrap{max-width:880px}
+.notice{margin:0 0 14px;padding:9px 12px;background:var(--sunk);border:1px solid var(--rule);
+  font-size:13px;color:var(--ink-2)}
+.notice.warn{background:var(--accent-soft);border-color:var(--accent);position:relative;padding-right:34px}
+.notice .x{position:absolute;top:5px;right:8px;background:none;border:0;font-size:17px;
+  line-height:1;color:var(--ink-3);cursor:pointer}
+#banktabs{margin-bottom:18px}
+
+/* distraction-free study: the card, and nothing else */
+.panel.studying > .head,
+.panel.studying #banktabs,
+.panel.studying .notice{display:none}
+.panel.studying > .body{padding:0}
+
+/* --- dashboard --- */
+.dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin-bottom:18px}
+.dash .stat{background:var(--card);padding:12px 10px;text-align:center}
+.dash .stat b{display:block;font:500 22px/1.1 var(--mono);color:var(--ink)}
+.dash .stat span{display:block;margin-top:3px;font-size:11.5px;color:var(--ink-3)}
+
+.decks{margin-top:18px;border-top:1px solid var(--rule-2)}
+.deck{display:flex;align-items:center;gap:10px;width:100%;padding:10px 2px;background:none;
+  border:0;border-bottom:1px solid var(--rule-2);cursor:pointer;text-align:left;font:inherit}
+.deck:hover{background:var(--sunk)}
+.deck .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.deck .dc{font:500 13px var(--mono);color:var(--ink-3);min-width:26px;text-align:right}
+.deck .dc.on{color:var(--pen)}
+.deck .dt{font:400 12px var(--mono);color:var(--ink-3)}
+
+.custom{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:20px;
+  padding-top:15px;border-top:1px solid var(--rule-2)}
+.custom .lbl{font-weight:500;font-size:13px;margin-right:3px}
+.custom .npd{margin-left:auto;font-size:12.5px;color:var(--ink-3);display:flex;align-items:center;gap:7px}
+.custom .npd input{width:64px;padding:5px 7px;font-size:13px}
+
+/* --- reviewer --- */
+.reviewer{border:1px solid var(--rule);background:var(--card)}
+.rhead{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid var(--rule);
+  background:var(--sunk)}
+.rhead .pos{flex:1;font-size:12.5px;color:var(--ink-3)}
+.rhead .star{background:none;border:0;font-size:17px;line-height:1;cursor:pointer;color:var(--ink-3)}
+.rhead .star.on{color:#C99A2E}
+.face{padding:20px 18px}
+.face.back{border-top:1px dashed var(--rule)}
+.face .ftext{font:400 15.5px/1.65 var(--serif);white-space:pre-wrap}
+.face .ftext.note{font-size:14px;color:var(--ink-2)}
+.face .sec{font:500 11.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 9px}
+.face .sec:not(:first-child){margin-top:16px}
+img.cardimg{display:block;max-width:100%;margin:10px 0;border:1px solid var(--rule-2)}
+.reviewer .go{margin:0;border-top:1px solid var(--rule)}
+.rate{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--rule)}
+.rate button{padding:11px 4px;background:var(--card);border:0;border-right:1px solid var(--rule);
+  cursor:pointer;font:inherit}
+.rate button:last-child{border-right:0}
+.rate button:hover{background:var(--sunk)}
+.rate button b{display:block;font-weight:500;font-size:13.5px}
+.rate button span{display:block;margin-top:2px;font:400 11.5px var(--mono);color:var(--ink-3)}
+.rate button[data-r="1"] b{color:var(--pen)}
+.hint{margin:8px 0 0;text-align:center;font-size:11.5px;color:var(--ink-3)}
+.done{padding:30px 18px;text-align:center;border:1px solid var(--rule);background:var(--card)}
+.done .t{margin:0 0 13px;font:400 16px var(--serif)}
+
+/* --- card browser --- */
+.cardbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.cardbar input[type=search]{flex:2;min-width:190px;width:auto}
+.cardbar select{flex:1;min-width:130px;width:auto;font-size:13.5px;padding:7px 9px}
+.cardbar .btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.count{margin:0 0 10px;font-size:12.5px;color:var(--ink-3)}
+.crow{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--rule-2)}
+.crow .cstar{cursor:pointer;color:var(--ink-3);font-size:15px}
+.crow .cstar.on{color:#C99A2E}
+.crow .cfront{flex:1;min-width:0}
+.crow .cfront b{display:block;font-weight:450;font-size:14px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.crow .cfront i{display:block;font-style:normal;font-size:12px;color:var(--ink-3);margin-top:2px}
+.crow .cdue{font:500 12px var(--mono);color:var(--ink-3);min-width:38px;text-align:right}
+.crow .cdue.on{color:var(--pen)}
+.crow .cdue.new{color:var(--accent)}
+
+/* --- editor and the marker's save panel --- */
+.editor .erow,.savecard .erow{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.editor .erow label,.savecard .erow label{flex:1;min-width:170px;font-size:13px;color:var(--ink-2)}
+.editor .erow select,.savecard .erow select{margin-top:5px;font-size:14px}
+.iqpick{border:1px solid var(--rule);background:var(--card);max-height:210px;overflow:auto;padding:4px 0}
+.iqmod{padding:5px 11px 8px}
+.iqmod + .iqmod{border-top:1px solid var(--rule-2)}
+.iqmod .mn{display:block;font:500 11.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-3);margin:4px 0 6px}
+.iqopt{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px;cursor:pointer}
+.iqopt input{margin-top:3px;flex:0 0 auto}
+.thumbs{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;align-items:flex-start}
+img.thumb{max-height:88px;border:1px solid var(--rule-2)}
+.thumbs .tx{background:var(--card);border:1px solid var(--rule);color:var(--ink-2);
+  font-size:14px;line-height:1;padding:3px 7px;cursor:pointer;align-self:center}
+.ebtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:20px}
+.ebtns .go{margin:0;flex:0 0 auto;padding:11px 22px}
+.ebtns .danger{margin-left:auto}
+.hist{margin:14px 0 0;font-size:12.5px;color:var(--ink-3);line-height:1.6}
+.savecard{margin-top:20px;padding:15px;background:var(--sunk);border:1px solid var(--rule)}
+.savecard .t{margin:0 0 4px;font-weight:500;font-size:14.5px}
+.savecard .d{margin:0 0 13px;font-size:13px;color:var(--ink-3)}
+.savecard.saved{background:var(--won-wash);border-color:var(--won)}
 .entry .rm:hover{text-decoration:underline}
 
 /* trial-paper additions */
