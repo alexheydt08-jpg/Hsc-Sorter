@@ -273,8 +273,9 @@
       <h2>Flashcards</h2>
       <div class="tools">
         <button type="button" class="btn" id="cexport">Export</button>
-        <label class="btn" style="position:relative;overflow:hidden">Import
-          <input type="file" id="cimport" accept=".json,application/json"
+        <label class="btn" style="position:relative;overflow:hidden" title="A .json backup restores your collection; PDFs and images become new cards">Import
+          <input type="file" id="cimport" multiple
+                 accept=".json,application/json,.pdf,application/pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
                  style="position:absolute;inset:0;opacity:0;cursor:pointer">
         </label>
       </div>

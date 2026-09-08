@@ -1010,6 +1010,127 @@ async function importCards(file){
   return { ...r, total: data.cards.length };
 }
 
+/* ---------- importing pictures and PDFs as cards -------------------------
+   A JSON file restores a whole collection. Anything else — a screenshot, a
+   photo, a scanned paper — is raw material, so it becomes new cards instead.
+   pdf.js is vendored under vendor/ and loaded only when a PDF actually
+   arrives, so the usual path pays nothing for it. */
+
+let pdfLib = null;
+async function loadPdfLib(){
+  if (pdfLib) return pdfLib;
+  await new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "vendor/pdf.min.js";
+    s.onload = res;
+    s.onerror = () => rej(new Error("could not load the PDF reader"));
+    document.head.appendChild(s);
+  });
+  pdfLib = window.pdfjsLib;
+  pdfLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
+  return pdfLib;
+}
+
+/* every page of a PDF, rendered to an image the same size as an upload */
+async function pdfToImages(file, onProgress){
+  const lib = await loadPdfLib();
+  const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const out = [];
+  for (let i = 1; i <= doc.numPages; i++){
+    const page = await doc.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min(2.5, MAX_EDGE / Math.max(base.width, base.height));
+    const vp = page.getViewport({ scale });
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(vp.width);
+    cv.height = Math.round(vp.height);
+    const ctx = cv.getContext("2d");
+    /* PDF pages have no background of their own; without this the text lands
+       on transparency and disappears against a dark backdrop */
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    out.push(await new Promise(r => cv.toBlob(r, "image/webp", WEBP_QUALITY)));
+    onProgress?.(i, doc.numPages);
+  }
+  return out;
+}
+
+const isImage = f => /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+const isPdf   = f => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+
+/* one page per card, or pages paired as front and back */
+function askImportMode(n){
+  return new Promise(resolve => {
+    const el = document.createElement("div");
+    el.className = "modal";
+    const pairs = Math.floor(n / 2);
+    el.innerHTML = `<div class="modalbox">
+      <p class="t">${n} page${n === 1 ? "" : "s"} ready</p>
+      <p class="d">How should they become flashcards?</p>
+      <div class="mbtns">
+        <button class="go" data-m="each">${n} card${n === 1 ? "" : "s"} — one per page</button>
+        <button class="btn" data-m="pair"${n < 2 ? " disabled" : ""}>${pairs} card${pairs === 1 ? "" : "s"} — page 1 front, page 2 back, and so on</button>
+      </div>
+      <p class="note">Pick the second when the pages run question, answer, question, answer —
+        a paper followed by its solutions. Either way the cards are yours to edit afterwards.</p>
+      <button class="btn mcancel" data-m="cancel">Cancel</button>
+    </div>`;
+    el.querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
+      el.remove();
+      resolve(b.dataset.m);
+    });
+    el.onclick = e => { if (e.target === el){ el.remove(); resolve("cancel"); } };
+    document.body.appendChild(el);
+  });
+}
+
+async function importMedia(files, say){
+  const pages = [];
+  for (const f of files){
+    if (isPdf(f)){
+      say(`Reading ${f.name}…`);
+      pages.push(...await pdfToImages(f, (i, n) => say(`Reading ${f.name} — page ${i} of ${n}…`)));
+    } else if (isImage(f)){
+      pages.push(await shrinkImage(f));
+    }
+  }
+  if (!pages.length) return { error: "Nothing readable in those files." };
+
+  const mode = await askImportMode(pages.length);
+  if (mode === "cancel") return { cancelled: true };
+
+  say("Saving…");
+  const made = [];
+  if (mode === "pair"){
+    for (let i = 0; i + 1 < pages.length; i += 2){
+      const c = blankCard(APP.subject);
+      c.tags = ["Imported"];
+      c.front.images = [await storeBlobDirect(pages[i])];
+      c.back.images  = [await storeBlobDirect(pages[i + 1])];
+      await putCard(c);
+      made.push(c);
+    }
+  } else {
+    for (const pg of pages){
+      const c = blankCard(APP.subject);
+      c.tags = ["Imported"];
+      c.front.images = [await storeBlobDirect(pg)];
+      await putCard(c);
+      made.push(c);
+    }
+  }
+  await loadCards();
+  return { cards: made.length, pages: pages.length, mode };
+}
+
+/* pages are already shrunk, so they skip the resize storeBlob would redo */
+async function storeBlobDirect(blob){
+  const id = uid();
+  await dbPut("blobs", { id, blob });
+  return { kind: "blob", id };
+}
+
 /* ---------- the save panel the marker shows after a mark ------------------ */
 /* payload: { subject, front:{text,images}, back:{text,images}, notes, tags, iqs, module } */
 function renderSavePanel(host, payload){
@@ -1074,14 +1195,35 @@ async function initCards(){
   $$("#banktabs button").forEach(b => b.onclick = () => { if (b.dataset.tab !== "add") draft = null; setBankTab(b.dataset.tab); });
   $("#cexport").onclick = exportCards;
   $("#cimport").onchange = async e => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const r = await importCards(f);
-    const msg = $("#importmsg");
-    msg.textContent = r.error ? r.error
-      : `Imported: ${r.added} new, ${r.updated} updated, out of ${r.total}.`;
-    msg.classList.remove("hidden");
+    const chosen = Array.from(e.target.files || []);
     e.target.value = "";
+    if (!chosen.length) return;
+    const msg = $("#importmsg");
+    const say = t => { msg.textContent = t; msg.classList.remove("hidden"); };
+
+    const json = chosen.filter(f => /\.json$/i.test(f.name) || f.type === "application/json");
+    const media = chosen.filter(f => !json.includes(f));
+    try {
+      /* a JSON file is a collection to restore; anything else is material to
+         turn into new cards */
+      if (json.length){
+        const r = await importCards(json[0]);
+        say(r.error ? r.error
+          : `Restored: ${r.added} new, ${r.updated} updated, out of ${r.total} cards.`);
+        if (media.length) return;
+      }
+      if (media.length){
+        const r = await importMedia(media, say);
+        if (r.cancelled) return msg.classList.add("hidden");
+        say(r.error ? r.error
+          : `Added ${r.cards} card${r.cards === 1 ? "" : "s"} from ${r.pages} page${r.pages === 1 ? "" : "s"}.`
+            + (r.mode === "each" ? " Each has a blank back — fill it in under Cards." : ""));
+        setBankTab("cards");
+      }
+    } catch (err){
+      say("Import failed: " + (err?.message || "unreadable file."));
+    }
+    drawBank();
   };
   drawBank();
 }

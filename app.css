@@ -523,3 +523,18 @@ img.thumb{max-height:88px;border:1px solid var(--rule-2)}
   font:450 11.5px var(--sans);padding:2px 8px;cursor:pointer;vertical-align:middle}
 .ptmark:hover{border-color:var(--ink-2);background:var(--sunk)}
 @media print{ .ptmark{display:none} }
+
+/* --- small modal, used to ask how imported pages should become cards --- */
+.modal{position:fixed;inset:0;z-index:200;background:rgba(22,35,58,.42);
+  display:flex;align-items:center;justify-content:center;padding:20px}
+.modalbox{background:var(--card);border:1px solid var(--rule);max-width:440px;width:100%;
+  padding:20px 22px;box-shadow:0 12px 40px rgba(22,35,58,.22)}
+.modalbox .t{margin:0 0 3px;font:500 16px var(--sans)}
+.modalbox .d{margin:0 0 15px;color:var(--ink-3);font-size:13.5px}
+.modalbox .mbtns{display:flex;flex-direction:column;gap:8px}
+.modalbox .mbtns .go{margin:0;padding:11px 14px}
+.modalbox .mbtns .btn{padding:10px 14px;text-align:left}
+.modalbox .mbtns .btn[disabled]{opacity:.45;cursor:not-allowed}
+.modalbox .note{margin:13px 0 0}
+.modalbox .mcancel{margin-top:14px;background:none;border:0;color:var(--ink-3);
+  padding:0;text-decoration:underline;cursor:pointer;font-size:13px}
