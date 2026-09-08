@@ -375,11 +375,20 @@ function ptGenerate(){
 
   const today = new Date().toLocaleDateString("en-AU", { day:"numeric", month:"long", year:"numeric" });
   let n = 0;
+  /* where a question actually came from. The paper mixes NESA questions with
+     school trials, so this cannot be hardcoded to "HSC" — a James Ruse trial
+     question was being printed as though NESA had set it. */
+  const origin = r => r.source === "Trial"
+    ? `${r.year} ${esc(r.school)} trial`
+    : `${r.year} HSC`;
+
   const qhtml = r => {
     n++;
     const imgs = (r.questionImages || []).map(p => `<img src="${esc(p)}" alt="">`).join("");
-    return `<div class="ptq"><div class="qlbl">Question ${n} <span style="font-weight:400">(${r.marks} mark${r.marks===1?"":"s"})</span></div>
-      <div class="src">Source: ${r.year} HSC ${esc(r.subject)} · Q${r.questionNumber}</div>${imgs}</div>`;
+    return `<div class="ptq" data-qid="${esc(r.id)}">
+      <div class="qlbl">Question ${n} <span style="font-weight:400">(${r.marks} mark${r.marks===1?"":"s"})</span>
+        <button class="ptmark" data-mark="${esc(r.id)}" title="Send this question to the marker">✎ Mark</button></div>
+      <div class="src">Source: ${origin(r)} ${esc(r.subject)} · Q${r.questionNumber}</div>${imgs}</div>`;
   };
   const mcHtml = mc.map(qhtml).join("");
   const siiHtml = sii.map(qhtml).join("");
@@ -387,17 +396,24 @@ function ptGenerate(){
   let an = 0;
   const ahtml = r => {
     an++;
-    const body = r.section === "I"
+    const mg = (r.mgImages || []).map(p => `<img src="${esc(p)}" alt="">`).join("");
+    /* NESA multiple choice carries a correct-option letter; a trial paper's
+       does not, and its solution is an image like any other question */
+    const body = (r.section === "I" && r.answer)
       ? `<div class="pt-mcans">Answer: <b>${esc(r.answer)}</b></div>`
-      : (r.mgImages || []).map(p => `<img src="${esc(p)}" alt="">`).join("");
+      : (mg || `<p class="note" style="margin:0">No solutions were published with this paper.</p>`);
+    const what = r.source === "Trial"
+      ? "the school's solutions"
+      : "official NESA marking guidelines";
     return `<div class="ptq"><div class="qlbl">Question ${an}</div>
-      <div class="src">${r.year} HSC ${esc(r.subject)} · Q${r.questionNumber} — official NESA marking guidelines</div>${body}</div>`;
+      <div class="src">${origin(r)} ${esc(r.subject)} · Q${r.questionNumber} — ${what}</div>${body}</div>`;
   };
   const ansHtml = mc.concat(sii).map(ahtml).join("");
 
   $("#printview").innerHTML = `
     <div class="pt-toolbar">
       <button class="save" onclick="window.print()">⬇ Save as PDF</button>
+      <button class="save" id="ptsend">✎ Send this test to the marker</button>
       <button class="back" id="ptback">← Back to the app</button>
       <span class="tip">In the print dialog choose “Save as PDF” as the destination.</span>
     </div>
@@ -419,13 +435,31 @@ function ptGenerate(){
         <p class="pt-secsub">${sii.reduce((s,r)=>s+r.marks,0)} marks · Show all relevant working in questions involving calculations</p>${siiHtml}` : ""}
       <div class="pt-ans-start"></div>
       <div class="pt-sechdr">Answer sheet — marking guidelines &amp; sample answers</div>
-      <p class="pt-secsub">Official NESA criteria and sample answers for every question in this test. Mark yourself honestly, or send a question to the marker.</p>
+      <p class="pt-secsub">Marking guidelines and sample answers for every question in this test — NESA's for HSC questions, the school's own for trial questions. Mark yourself honestly, or send a question to the marker.</p>
       ${ansHtml}
     </div>`;
 
   document.body.classList.add("pt-mode");
   window.scrollTo({ top:0 });
   $("#ptback").onclick = exitPaper;
+
+  /* Per question: the accurate, cheap route — one question and its own
+     guidelines go to the marker. */
+  $("#printview").querySelectorAll("[data-mark]").forEach(b => b.onclick = () => {
+    const rec = DATA.find(r => r.id === b.dataset.mark);
+    if (!rec) return;
+    exitPaper();
+    sendToMarker(rec);
+  });
+
+  /* Whole paper: attaches every question image at once, for working through
+     the test question by question against the paper itself. */
+  $("#ptsend").onclick = () => {
+    const paper = mc.concat(sii);
+    const paths = paper.flatMap(r => r.questionImages || []);
+    exitPaper();
+    sendPaperToMarker(paths, `${APP.subject} practice test · ${paper.length} questions · ${total} marks`);
+  };
 }
 
 function exitPaper(){

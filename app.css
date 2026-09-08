@@ -517,3 +517,9 @@ img.thumb{max-height:88px;border:1px solid var(--rule-2)}
 .qfoot .reveal.none{flex:1;min-width:210px;display:flex;align-items:center;justify-content:center;
   border:1px dashed var(--rule);color:var(--ink-3);background:var(--sunk);padding:9px 12px;
   font:400 13.5px var(--sans);cursor:default}
+
+/* the ✎ Mark button on each question in a generated paper — screen only */
+.ptmark{margin-left:10px;background:none;border:1px solid var(--rule);color:var(--ink-2);
+  font:450 11.5px var(--sans);padding:2px 8px;cursor:pointer;vertical-align:middle}
+.ptmark:hover{border-color:var(--ink-2);background:var(--sunk)}
+@media print{ .ptmark{display:none} }

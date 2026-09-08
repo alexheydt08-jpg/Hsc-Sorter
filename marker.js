@@ -307,6 +307,43 @@ async function sendToMarker(rec){
   }
   $("#ma").focus();
 }
+/* A whole generated practice test, handed over as a paper.
+
+   The marker works one question at a time, so this fills the "from a whole
+   paper" mode: every question image is attached, and the student names the
+   question they are answering. Marking a single question is cheaper and more
+   accurate — the per-question button in the paper sends that question's own
+   guidelines too — so this says as much rather than pretending otherwise. */
+async function sendPaperToMarker(paths, label){
+  setView("marker");
+  mode = "paper";
+  $$(".modes button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.mode === "paper")));
+  $$("[data-pane]").forEach(p => p.classList.toggle("hidden", p.dataset.pane !== "paper"));
+
+  detachSorter();
+  ["paper", "paperanswer", "guidelines"].forEach(s => { files[s].length = 0; drawFiles(s); });
+
+  const box = $("#fromsorter");
+  box.classList.remove("hidden");
+  box.innerHTML = `<button class="x" id="fsx" aria-label="Detach this paper">×</button>
+    <b>From the practice test — ${esc(label)}</b>
+    <span id="fsstat">Attaching the paper…</span>`;
+  $("#fsx").onclick = () => { detachSorter(); files.paper.length = 0; drawFiles("paper"); };
+
+  try {
+    for (const p of paths) files.paper.push(await pathToFile(p));
+    drawFiles("paper");
+    $("#fsstat").textContent =
+      `${files.paper.length} question image${files.paper.length === 1 ? "" : "s"} attached. `
+      + "Enter the question number you answered and hand in your response. "
+      + "Marking one question at a time from the paper's ✎ Mark buttons is cheaper "
+      + "and brings that question's real marking guidelines with it.";
+  } catch {
+    $("#fsstat").textContent = "The paper's images could not be attached. Attach a photo of the question instead.";
+  }
+}
+
+window.sendPaperToMarker = sendPaperToMarker;
 window.sendToMarker = sendToMarker;
 
 function detachSorter(){
