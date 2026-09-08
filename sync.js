@@ -71,8 +71,8 @@ async function ghFetch(path, opts = {}){
       ? "GitHub's hourly request limit is used up. Try again later."
       : "The token does not have permission for this repository. It needs Contents: read and write.");
   }
-  if (res.status === 404 && opts.method && opts.method !== "GET")
-    throw new SyncError("Repository not found. Check owner/name, and that the token can see it.");
+  /* 404 is deliberately not thrown here: a missing file is normal on a first
+     sync, and putFile tells an empty repository apart from a wrong name */
   return res;
 }
 
@@ -102,6 +102,15 @@ async function putFile(path, base64, message){
     /* stale or missing sha — read the current one and try once more */
     const cur = await getFile(path);
     res = await send(cur ? cur.sha : undefined);
+  }
+  if (res.status === 404){
+    /* A brand new repository with no commits has no default branch, so writing
+       a file into it 404s exactly like a wrong name would. Tell those apart
+       rather than sending someone to check a repo name that is already right. */
+    const probe = await ghFetch(`/repos/${syncRepo()}`);
+    throw new SyncError(probe.ok
+      ? "The repository is empty, so there is nothing to write into yet. Open it on GitHub, add a README (Add file → Create new file → Commit), then sync again."
+      : "Repository not found. Check owner/name, and that the token grants access to it.");
   }
   if (!res.ok) throw new SyncError(`GitHub returned ${res.status} writing ${path}.`);
   const j = await res.json();
