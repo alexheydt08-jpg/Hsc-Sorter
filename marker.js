@@ -131,6 +131,10 @@ const files = Object.fromEntries(SLOTS.map(s => [s, []]));
 const readKey = () => { try { return localStorage.getItem(KEY_STORAGE) || ""; } catch { return ""; } };
 const getKey  = () => ($("#key").value || readKey()).trim();
 
+/* The key matters once, at setup. After that it is noise at the top of every
+   visit, so a saved key collapses to one line that expands again on click. */
+let keyOpen = false;
+
 function paintKey(){
   const saved = readKey();
   if (saved && !$("#key").value) $("#key").value = saved;
@@ -138,15 +142,22 @@ function paintKey(){
   $("#keynote").textContent = saved
     ? "A key is saved in this browser. It is never committed or built into the published page — add it again on each device you use."
     : "Stored in this browser only — never in the repository or the published page. Get a key at console.anthropic.com and set a monthly spend limit while you're there.";
+  const collapse = saved && !keyOpen;
+  $("#keystrip").classList.toggle("hidden", collapse);
+  $("#keyedit").classList.toggle("hidden", !collapse);
 }
+
+$("#keyedit").onclick = () => { keyOpen = true; paintKey(); $("#key").focus(); };
 $("#keysave").onclick = () => {
   const v = $("#key").value.trim();
   try { v ? localStorage.setItem(KEY_STORAGE, v) : localStorage.removeItem(KEY_STORAGE); } catch {}
+  keyOpen = false;
   paintKey();
 };
 $("#keyforget").onclick = () => {
   try { localStorage.removeItem(KEY_STORAGE); } catch {}
   $("#key").value = "";
+  keyOpen = true;
   paintKey();
 };
 paintKey();
@@ -284,6 +295,9 @@ async function sendToMarker(rec){
     for (const p of (rec.mgImages || []))       files.guidelines.push(await pathToFile(p));
     drawFiles("question"); drawFiles("guidelines");
     const hasG = files.guidelines.length || $("#g").value.trim();
+    /* the guidelines section is folded away by default; a question that
+       brought its own should not hide them */
+    if (hasG) $("#gwrap").open = true;
     stat.textContent = hasG
       ? (rec.source === "Trial"
           ? "The question image and the school's marking guidelines are attached below. Type your answer and mark it."

@@ -113,21 +113,28 @@
 <!-- ====================================================================== -->
 <div class="view hidden" id="view-marker">
 
+  <!-- key: full row until a key is saved, then a single quiet line -->
   <div class="keystrip" id="keystrip">
-    <label for="key">Anthropic API key</label>
-    <input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
-    <button type="button" class="btn" id="keysave">Save</button>
-    <button type="button" class="btn danger hidden" id="keyforget">Forget</button>
+    <div class="keyrow">
+      <label for="key">Anthropic API key</label>
+      <input id="key" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+      <button type="button" class="btn primary" id="keysave">Save</button>
+      <button type="button" class="btn danger hidden" id="keyforget">Forget</button>
+    </div>
     <p id="keynote">Stored in this browser only — never in the repository or the published page.
       Get a key at console.anthropic.com and set a monthly spend limit while you're there.</p>
   </div>
+  <button type="button" class="keysaved hidden" id="keyedit">
+    <span class="tick" aria-hidden="true">✓</span> API key saved in this browser
+    <span class="chg">Change</span>
+  </button>
 
   <div class="cols">
     <section class="panel">
       <div class="head">
         <h2>The work</h2>
         <div class="tools">
-          <select id="model" aria-label="Model" style="width:auto;font-size:13px;padding:5px 8px">
+          <select id="model" aria-label="Model">
             <option value="claude-opus-5">Opus 5</option>
             <option value="claude-sonnet-5">Sonnet 5</option>
             <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
@@ -140,29 +147,33 @@
         <div class="fromsorter hidden" id="fromsorter"></div>
 
         <div class="modes" role="group" aria-label="How the work is provided">
-          <button type="button" data-mode="split" aria-pressed="true">Question &amp; answer separately</button>
+          <button type="button" data-mode="split" aria-pressed="true">Question + answer</button>
           <button type="button" data-mode="combined" aria-pressed="false">One file with both</button>
-          <button type="button" data-mode="paper" aria-pressed="false">From a whole paper</button>
+          <button type="button" data-mode="paper" aria-pressed="false">From a paper</button>
         </div>
 
         <!-- SPLIT -->
         <div data-pane="split">
           <div class="field">
             <label for="mq">Question <span class="note">— include the mark value, e.g. (4 marks)</span></label>
-            <textarea id="mq" placeholder="Explain why a satellite in a stable circular orbit is accelerating. (3 marks)"></textarea>
-            <label class="drop" data-slot="question">
-              <input type="file" accept="image/*,.pdf" multiple>
-              Drop, paste or choose a photo or PDF of the question
-            </label>
+            <div class="inputbox">
+              <textarea id="mq" placeholder="Explain why a satellite in a stable circular orbit is accelerating. (3 marks)"></textarea>
+              <label class="drop" data-slot="question">
+                <input type="file" accept="image/*,.pdf" multiple>
+                <span class="clip" aria-hidden="true">▤</span> Attach a photo or PDF — or drop and paste here
+              </label>
+            </div>
             <ul class="files" data-list="question"></ul>
           </div>
           <div class="field">
             <label for="ma">Your answer</label>
-            <textarea id="ma" placeholder="Type it out, or attach a photo of the handwritten response."></textarea>
-            <label class="drop" data-slot="answer">
-              <input type="file" accept="image/*,.pdf" multiple>
-              Drop, paste or choose a photo or PDF of the answer
-            </label>
+            <div class="inputbox">
+              <textarea id="ma" placeholder="Type it out, or attach a photo of the handwritten response."></textarea>
+              <label class="drop" data-slot="answer">
+                <input type="file" accept="image/*,.pdf" multiple>
+                <span class="clip" aria-hidden="true">▤</span> Attach a photo or PDF — or drop and paste here
+              </label>
+            </div>
             <ul class="files" data-list="answer"></ul>
           </div>
         </div>
@@ -171,11 +182,13 @@
         <div data-pane="combined" class="hidden">
           <div class="field">
             <label>File containing both the question and the answer</label>
-            <p class="note" style="margin:-2px 0 8px">A worksheet, a photo of a completed page, or a scanned booklet. The marker finds the question and the response inside it.</p>
-            <label class="drop" data-slot="combined">
-              <input type="file" accept="image/*,.pdf" multiple>
-              Drop, paste or choose the file
-            </label>
+            <div class="inputbox">
+              <label class="drop tall" data-slot="combined">
+                <input type="file" accept="image/*,.pdf" multiple>
+                <span class="clip" aria-hidden="true">▤</span> Drop, paste or choose a worksheet, a photo of a
+                completed page, or a scanned booklet — the marker finds the question and the response inside it
+              </label>
+            </div>
             <ul class="files" data-list="combined"></ul>
           </div>
           <div class="field">
@@ -188,10 +201,12 @@
         <div data-pane="paper" class="hidden">
           <div class="field">
             <label>Exam paper</label>
-            <label class="drop" data-slot="paper">
-              <input type="file" accept="image/*,.pdf" multiple>
-              Drop, paste or choose the paper (PDF)
-            </label>
+            <div class="inputbox">
+              <label class="drop tall" data-slot="paper">
+                <input type="file" accept="image/*,.pdf" multiple>
+                <span class="clip" aria-hidden="true">▤</span> Drop, paste or choose the paper (PDF)
+              </label>
+            </div>
             <ul class="files" data-list="paper"></ul>
           </div>
           <div class="field">
@@ -203,38 +218,47 @@
           </div>
           <div class="field">
             <label for="pa">Your answer</label>
-            <textarea id="pa" placeholder="Type it out, or attach a photo below." style="min-height:80px"></textarea>
-            <label class="drop" data-slot="paperanswer">
-              <input type="file" accept="image/*,.pdf" multiple>
-              Drop, paste or choose a photo of the answer
-            </label>
+            <div class="inputbox">
+              <textarea id="pa" placeholder="Type it out, or attach a photo below."></textarea>
+              <label class="drop" data-slot="paperanswer">
+                <input type="file" accept="image/*,.pdf" multiple>
+                <span class="clip" aria-hidden="true">▤</span> Attach a photo or PDF — or drop and paste here
+              </label>
+            </div>
             <ul class="files" data-list="paperanswer"></ul>
           </div>
         </div>
 
-        <!-- GUIDELINES -->
-        <div class="field" style="border-top:1px solid var(--rule-2);padding-top:18px;margin-top:20px">
-          <label for="g">Marking guidelines <span class="note">— optional</span></label>
-          <p class="note" style="margin:-2px 0 8px">Leave this empty and the marker builds a sensible HSC-style breakdown itself. Adding the real guidelines makes the marks match NESA exactly — questions sent here from Browse bring theirs with them.</p>
-          <textarea id="g" placeholder="Paste the NESA marking guidelines, or attach them below." style="min-height:70px"></textarea>
-          <label class="drop" data-slot="guidelines">
-            <input type="file" accept="image/*,.pdf" multiple>
-            Drop, paste or choose the guidelines
-          </label>
-          <ul class="files" data-list="guidelines"></ul>
-        </div>
+        <!-- GUIDELINES — optional, so folded away until wanted -->
+        <details class="optional" id="gwrap">
+          <summary>Marking guidelines <span class="note">— optional, improves accuracy</span></summary>
+          <div class="field">
+            <p class="note" style="margin:0 0 8px">Leave this empty and the marker builds a sensible HSC-style
+              breakdown itself. Adding the real guidelines makes the marks match NESA exactly — questions sent
+              here from Browse bring theirs with them.</p>
+            <div class="inputbox">
+              <textarea id="g" placeholder="Paste the marking guidelines, or attach them below."></textarea>
+              <label class="drop" data-slot="guidelines">
+                <input type="file" accept="image/*,.pdf" multiple>
+                <span class="clip" aria-hidden="true">▤</span> Attach a photo or PDF — or drop and paste here
+              </label>
+            </div>
+            <ul class="files" data-list="guidelines"></ul>
+          </div>
+        </details>
 
         <button class="go" id="go">Mark this response</button>
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="outpanel">
       <div class="head">
         <h2>Marked</h2>
         <div class="tools"><button type="button" class="btn hidden" id="copy">Copy</button></div>
       </div>
       <div class="body" id="out">
-        <p class="empty">Nothing marked yet. Hand in a question and your answer — typed, photographed, or as one file with both — and the mark-by-mark breakdown appears here alongside a comment on what the remaining marks needed.</p>
+        <p class="empty">Hand in a question and your answer — typed, photographed, or as one file with both.
+          The mark-by-mark breakdown appears here, alongside a comment on what the remaining marks needed.</p>
       </div>
     </section>
   </div>
@@ -272,6 +296,7 @@
 
 <div id="printview"></div>
 
+<script src="syllabus.js"></script>
 <script src="data.js"></script>
 <script src="trials.js"></script>
 <script src="app.js"></script>

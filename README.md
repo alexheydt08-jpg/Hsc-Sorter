@@ -27,16 +27,30 @@ Normanhurst Boys, North Sydney Boys, North Sydney Girls, Sydney Boys, Sydney
 Girls and Sydney Grammar — 40 Chemistry and 35 Physics.
 
 Unlike the NESA questions, these carry no official syllabus mapping, so each is
-tagged automatically: a TF-IDF nearest-neighbour classifier trained on the
-NESA-tagged questions, cross-checked against a keyword classifier. A tag is
-applied only where the two agree, or where the keyword rules abstain entirely.
-Measured leave-one-out against the NESA set, that places about 82% of questions
-with roughly 85% topic and 94% module accuracy.
+tagged automatically. Three views of a question are scored across all sixteen
+topics of its subject and combined: its nearest neighbours among the
+NESA-tagged questions (TF-IDF), how much of its vocabulary matches the
+**syllabus text** for each topic (weighted by inverse document frequency, so
+"commutator" and "titre" count for more than "velocity"), and a set of keyword
+rules. The syllabus is also seeded into the neighbour index, so a topic can be
+recognised from the syllabus itself rather than only from past questions that
+happen to resemble it.
 
-The remaining 442 are deliberately left untagged and collected under **Unsorted
-— needs a topic**, where they stay searchable and filterable by school and year
-rather than being filed under a topic they may not belong to. They are not
-offered in the practice-test builder, which selects by topic.
+Measured leave-one-out against the NESA set, using question text alone because
+that is all a trial question offers:
+
+|           | placed | topic | module |
+| --------- | -----: | ----: | -----: |
+| Chemistry |    91% |   74% |    91% |
+| Physics   |    95% |   84% |    95% |
+
+Where the three views agree the tag is taken as-is; where they only partly
+agree the card is badged **auto-tagged** so you know to check it. Below a
+confidence floor nothing is applied at all, and the question is collected under
+**Unsorted — needs a topic**, where it stays searchable and filterable by
+school and year rather than being filed under a topic it may not belong to. 139
+questions sit there. They are not offered in the practice-test builder, which
+selects by topic.
 
 Segmentation is automatic too, and a few papers resist it. Sydney Grammar 2019
 (Physics) yields only 4 questions — its multiple-choice numbering is not in the
@@ -119,6 +133,7 @@ the workflow unnecessary.
 
 ```
 index.html   the shell and the markup for all four sections
+syllabus.js  NESA module and inquiry-question order, used to sort the tree
 app.css      the whole design system
 app.js       shared shell: the subject, the section tabs
 sorter.js    browse, filters, the tree, the practice-test maker

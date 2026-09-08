@@ -38,6 +38,14 @@ const MODORDER = m => {
   return hit ? parseInt(hit[1]) : 98;
 };
 
+/* inquiry questions in the order the syllabus teaches them, not the order the
+   first tagged question happened to introduce them (see syllabus.js) */
+function orderedIQs(module){
+  const iqs = (TAX[APP.subject] || {})[module] || {};
+  return Object.keys(iqs).sort((a, b) =>
+    topicOrder(APP.subject, module, iqs[a]) - topicOrder(APP.subject, module, iqs[b]));
+}
+
 DATA.forEach(r => {
   r._hay = ((r.questionText || "") + " " + (r.school || "") + " " + (r.source || "") + " " +
     (r.tags || []).map(t => `${t.module} ${t.topic} ${t.iq}`).join(" ")).toLowerCase();
@@ -114,7 +122,7 @@ function renderTree(){
       ? DATA.filter(r => baseFilter(r, true) && !(r.tags || []).length).length
       : DATA.filter(r => baseFilter(r, true) && (r.tags || []).some(t => t.module === m)).length;
     const open = state.openMods.has(m) || state.module === m;
-    const rows = Object.keys(iqs).map(iq => {
+    const rows = orderedIQs(m).map(iq => {
       const n = m === UNSORTED
         ? DATA.filter(r => baseFilter(r, true) && !(r.tags || []).length).length
         : DATA.filter(r => baseFilter(r, true) && (r.tags || []).some(t => t.iq === iq)).length;
@@ -165,7 +173,7 @@ function card(r){
       ${r.marks ? `<span class="marksq">${r.marks} mark${r.marks === 1 ? "" : "s"}</span>` : ""}
       <span class="badge">Section ${r.section} — ${r.section === "I" ? "multiple choice" : "extended response"}</span>
       <span class="badge${isTrial ? " trial" : ""}">${isTrial ? "Trial paper" : "NESA HSC"}</span>
-      ${isTrial && r.confidence === "med" ? `<span class="badge auto" title="Topic assigned automatically — may be imprecise">auto-tagged</span>` : ""}
+      ${isTrial && (r.confidence === "med" || r.confidence === "low") ? `<span class="badge auto" title="Topic assigned automatically from the question text and the syllabus — likely right, but check it">auto-tagged</span>` : ""}
     </div>
     <div class="tagline">${tagbtns}</div>
     <div class="qimgs">${qimgs}</div>
@@ -307,7 +315,7 @@ function ptRenderTree(){
     .sort((a,b) => MODORDER(a)-MODORDER(b));
   $("#pttree").innerHTML = mods.map(m => {
     const iqs = TAX[APP.subject][m];
-    const rows = Object.keys(iqs).map(iq =>
+    const rows = orderedIQs(m).map(iq =>
       `<label class="pt-iq"><input type="checkbox" data-iq="${esc(iq)}" data-m="${esc(m)}" ${PT.checked.has(iq)?"checked":""}>
        <span><b>${esc(iqs[iq])}</b> — <i>${esc(iq)}</i></span></label>`).join("");
     const all = Object.keys(iqs).every(iq => PT.checked.has(iq));
